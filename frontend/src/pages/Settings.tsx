@@ -108,6 +108,18 @@ export function SettingsPage() {
                     className="w-40"
                   />
                 </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  Размер файла для теста скорости, байт
+                  <Input
+                    type="number"
+                    min={100000}
+                    max={10000000}
+                    step={100000}
+                    value={settings.speedDownloadBytes}
+                    onChange={(e) => update({ speedDownloadBytes: Number(e.target.value) })}
+                    className="w-40"
+                  />
+                </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"

@@ -9,6 +9,10 @@ type Proxy struct {
 	Port         int        `json:"port"`
 	Protocol     string     `json:"protocol"`
 	Country      *string    `json:"country,omitempty"`
+	City         *string    `json:"city,omitempty"`
+	ExitIP       *string    `json:"exitIp,omitempty"`
+	Latitude     *float64   `json:"latitude,omitempty"`
+	Longitude    *float64   `json:"longitude,omitempty"`
 	LatencyMs    *int       `json:"latencyMs,omitempty"`
 	DownloadMbps *float64   `json:"downloadMbps,omitempty"`
 	LastChecked  *time.Time `json:"lastChecked,omitempty"`

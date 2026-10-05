@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Download, Eraser, Play, RefreshCw, Trash2, X } from "lucide-react";
+import { Copy, Download, Eraser, Gauge, Play, RefreshCw, Trash2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatRelative } from "@/lib/time";
 import { formatDownload, formatLatency, latencyVariant, protocolVariant } from "@/lib/proxy";
+import { countryFlag, countryName, formatDistance, haversineKm } from "@/lib/geo";
 import { toast } from "@/stores/toastStore";
 import { useTestStore } from "@/stores/testStore";
-import { ProxyService, TesterService } from "../../bindings/proxy-pool-manager/internal/services";
+import { ProxyService, TesterService, type MyLocation } from "../../bindings/proxy-pool-manager/internal/services";
 import { Proxy, ProxyFilter } from "../../bindings/proxy-pool-manager/internal/models";
 
 type Status = "all" | "working" | "broken" | "unchecked";
@@ -46,6 +47,7 @@ export function ProxiesPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
   const [exportFormat, setExportFormat] = useState("txt");
+  const [myLocation, setMyLocation] = useState<MyLocation | null>(null);
 
   const running = useTestStore((s) => s.running);
   const progressTotal = useTestStore((s) => s.total);
@@ -58,6 +60,12 @@ export function ProxiesPage() {
     const id = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(id);
   }, [search]);
+
+  useEffect(() => {
+    TesterService.GetMyLocation()
+      .then((loc) => setMyLocation(loc))
+      .catch(() => setMyLocation(null));
+  }, []);
 
   useEffect(() => {
     setPage(0);
@@ -223,6 +231,13 @@ export function ProxiesPage() {
     }
   };
 
+  const distanceFor = (p: Proxy): number | null => {
+    if (!myLocation?.latitude || !myLocation?.longitude || p.latitude == null || p.longitude == null) {
+      return null;
+    }
+    return haversineKm(myLocation.latitude, myLocation.longitude, p.latitude, p.longitude);
+  };
+
   const sortIndicator = (column: string) =>
     sortBy === column ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
@@ -339,6 +354,15 @@ export function ProxiesPage() {
               Очистить статус
             </Button>
             <div className="ml-auto flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runBatch(() => TesterService.TestSpeedProxies([...selected]), "Тест скорости запущен")}
+                disabled={running || selected.size === 0}
+              >
+                <Gauge className="size-3.5" />
+                Скорость
+              </Button>
               <Button size="sm" variant="outline" onClick={handleCopy} disabled={selected.size === 0}>
                 <Copy className="size-3.5" />
                 Копировать
@@ -413,10 +437,13 @@ export function ProxiesPage() {
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("protocol")}>
                 Протокол{sortIndicator("protocol")}
               </th>
+              <th className="px-4 py-2 font-medium">Страна</th>
+              <th className="px-4 py-2 font-medium">Город</th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("latency")}>
                 Latency{sortIndicator("latency")}
               </th>
               <th className="px-4 py-2 font-medium">Скорость</th>
+              <th className="px-4 py-2 font-medium">Расстояние</th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("lastChecked")}>
                 Проверен{sortIndicator("lastChecked")}
               </th>
@@ -426,13 +453,13 @@ export function ProxiesPage() {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
                   Загрузка…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
                   Ничего не найдено.
                 </td>
               </tr>
@@ -453,10 +480,18 @@ export function ProxiesPage() {
                   <td className="px-4 py-2">
                     <Badge variant={protocolVariant(p.protocol)}>{p.protocol}</Badge>
                   </td>
+                  <td
+                    className="px-4 py-2"
+                    title={p.exitIp ? `${p.exitIp} · ${countryName(p.country)}` : countryName(p.country)}
+                  >
+                    {countryFlag(p.country)} {p.country ?? "—"}
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground">{p.city ?? "—"}</td>
                   <td className="px-4 py-2">
                     <Badge variant={latencyVariant(p.latencyMs)}>{formatLatency(p.latencyMs)}</Badge>
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">{formatDownload(p.downloadMbps)}</td>
+                  <td className="px-4 py-2 text-muted-foreground">{formatDistance(distanceFor(p))}</td>
                   <td className="px-4 py-2 text-muted-foreground">{formatRelative(p.lastChecked)}</td>
                   <td className="px-4 py-2 text-right">
                     <Button size="sm" variant="ghost" onClick={() => handleTestOne(p.id)} disabled={running}>

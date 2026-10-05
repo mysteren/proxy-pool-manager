@@ -10,6 +10,10 @@ export interface Proxy {
     "port": number;
     "protocol": string;
     "country"?: string | null;
+    "city"?: string | null;
+    "exitIp"?: string | null;
+    "latitude"?: number | null;
+    "longitude"?: number | null;
     "latencyMs"?: number | null;
     "downloadMbps"?: number | null;
     "lastChecked"?: string | null;

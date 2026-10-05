@@ -36,7 +36,7 @@ func DefaultSettings() Settings {
 		TestConcurrency:    50,
 		CopyFormat:         "uri",
 		ValidateViaHTTP:    true,
-		HTTPValidationURL:  "https://api.ipify.org?format=json",
+		HTTPValidationURL:  cloudflareMetaURL,
 	}
 }
 

@@ -16,6 +16,7 @@ export {
 
 export type {
     FetchResult,
+    MyLocation,
     Settings,
     TestCompleted,
     TestProgress,

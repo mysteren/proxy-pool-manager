@@ -137,6 +137,17 @@ func TestTestProxyFailure(t *testing.T) {
 	}
 }
 
+func TestParseMeta(t *testing.T) {
+	info := parseMeta([]byte(`{"clientIp":"1.2.3.4","country":"us","city":"Dallas","latitude":32.7,"longitude":-96.8}`))
+	if info.exitIP != "1.2.3.4" || info.country != "US" || info.city != "Dallas" || info.latitude == nil {
+		t.Fatalf("JSON meta разобран неверно: %+v", info)
+	}
+	trace := parseMeta([]byte("ip=5.6.7.8\nloc=DE\ncolo=FRA\n"))
+	if trace.exitIP != "5.6.7.8" || trace.country != "DE" {
+		t.Fatalf("trace разобран неверно: %+v", trace)
+	}
+}
+
 func TestRunBatchCancelReturns(t *testing.T) {
 	proxyRec := mockProxyServer(t, 2*time.Second)
 
@@ -157,7 +168,7 @@ func TestRunBatchCancelReturns(t *testing.T) {
 	}
 	done := make(chan struct{})
 	go func() {
-		tester.runBatch(ctx, len(proxies), feed, cfg)
+		tester.runBatch(ctx, len(proxies), feed, cfg, tester.testOne, tester.storage.UpdateTestResult, 5)
 		close(done)
 	}()
 

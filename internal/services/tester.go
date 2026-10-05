@@ -1,13 +1,16 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,11 +21,25 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+const (
+	// cloudflareMetaURL возвращает IP/страну/город/координаты клиента (exit-узла прокси).
+	cloudflareMetaURL = "https://speed.cloudflare.com/meta"
+	// cloudflareSpeedURLFormat — endpoint замера скорости.
+	cloudflareSpeedURLFormat = "https://speed.cloudflare.com/__down?bytes=%d"
+	// speedConcurrency — отдельный (меньший) лимит для тестов скорости.
+	speedConcurrency = 10
+)
+
 // TestResult — результат проверки одного прокси.
 type TestResult struct {
 	ProxyID      int64    `json:"proxyId"`
 	LatencyMs    *int     `json:"latencyMs,omitempty"`
 	DownloadMbps *float64 `json:"downloadMbps,omitempty"`
+	Country      *string  `json:"country,omitempty"`
+	City         *string  `json:"city,omitempty"`
+	ExitIP       *string  `json:"exitIp,omitempty"`
+	Latitude     *float64 `json:"latitude,omitempty"`
+	Longitude    *float64 `json:"longitude,omitempty"`
 	IsWorking    bool     `json:"isWorking"`
 	Error        string   `json:"error,omitempty"`
 }
@@ -41,7 +58,16 @@ type TestCompleted struct {
 	Working   int  `json:"working"`
 }
 
-// TesterService проверяет прокси: TCP-connect (latency) + HTTP через сам прокси.
+// MyLocation — местоположение пользователя (для расчёта расстояния до прокси).
+type MyLocation struct {
+	IP        string   `json:"ip"`
+	Country   string   `json:"country"`
+	City      string   `json:"city,omitempty"`
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
+}
+
+// TesterService проверяет прокси: TCP-connect, HTTP через прокси (с гео) и скорость.
 type TesterService struct {
 	storage  *StorageService
 	settings *SettingsService
@@ -60,10 +86,11 @@ type testConfig struct {
 	concurrency     int
 	validateViaHTTP bool
 	validationURL   string
+	speedBytes      int
 }
 
-// proxyFeed отдаёт прокси порциями, не загружая весь пул в память.
 type proxyFeed func(ctx context.Context, yield func(models.Proxy) bool)
+type proxyWorker func(ctx context.Context, p models.Proxy, cfg testConfig) TestResult
 
 func boolPtr(b bool) *bool { return &b }
 
@@ -98,15 +125,15 @@ func (s *TesterService) TestProxies(ids []int64) error {
 	feed := func(ctx context.Context, yield func(models.Proxy) bool) {
 		_ = s.storage.ForEachProxyByIDs(ctx, ids, yield)
 	}
-	return s.startBatch(len(ids), feed)
+	return s.startBatch(len(ids), feed, s.testOne, s.storage.UpdateTestResult, 0)
 }
 
-// TestAll проверяет весь пул (асинхронно, потоково).
+// TestAll проверяет весь пул.
 func (s *TesterService) TestAll() error {
 	return s.startFilterBatch(models.ProxyFilter{})
 }
 
-// TestNonWorking проверяет проверенные, но нерабочие прокси (асинхронно).
+// TestNonWorking проверяет проверенные, но нерабочие прокси.
 func (s *TesterService) TestNonWorking() error {
 	return s.startFilterBatch(models.ProxyFilter{OnlyWorking: boolPtr(false), Unchecked: boolPtr(false)})
 }
@@ -114,6 +141,39 @@ func (s *TesterService) TestNonWorking() error {
 // TestUnchecked проверяет прокси без статуса (ещё не проверенные).
 func (s *TesterService) TestUnchecked() error {
 	return s.startFilterBatch(models.ProxyFilter{Unchecked: boolPtr(true)})
+}
+
+// TestSpeedProxies проверяет скорость скачивания через указанные прокси.
+func (s *TesterService) TestSpeedProxies(ids []int64) error {
+	if len(ids) == 0 {
+		return fmt.Errorf("не выбрано ни одного прокси")
+	}
+	feed := func(ctx context.Context, yield func(models.Proxy) bool) {
+		_ = s.storage.ForEachProxyByIDs(ctx, ids, yield)
+	}
+	return s.startBatch(len(ids), feed, s.testSpeedOne, s.storage.UpdateSpeedResult, speedConcurrency)
+}
+
+// GetMyLocation определяет местоположение пользователя (без прокси).
+func (s *TesterService) GetMyLocation() (MyLocation, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(cloudflareMetaURL)
+	if err != nil {
+		return MyLocation{}, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+	if err != nil {
+		return MyLocation{}, err
+	}
+	info := parseMeta(body)
+	return MyLocation{
+		IP:        info.exitIP,
+		Country:   info.country,
+		City:      info.city,
+		Latitude:  info.latitude,
+		Longitude: info.longitude,
+	}, nil
 }
 
 // Cancel останавливает активную массовую проверку.
@@ -137,13 +197,16 @@ func (s *TesterService) startFilterBatch(filter models.ProxyFilter) error {
 	feed := func(ctx context.Context, yield func(models.Proxy) bool) {
 		_ = s.storage.ForEachProxy(ctx, filter, 500, yield)
 	}
-	return s.startBatch(total, feed)
+	return s.startBatch(total, feed, s.testOne, s.storage.UpdateTestResult, 0)
 }
 
-func (s *TesterService) startBatch(total int, feed proxyFeed) error {
+func (s *TesterService) startBatch(total int, feed proxyFeed, work proxyWorker, apply func(TestResult) error, concurrency int) error {
 	cfg, err := s.testConfig()
 	if err != nil {
 		return err
+	}
+	if concurrency <= 0 {
+		concurrency = cfg.concurrency
 	}
 	s.mu.Lock()
 	if s.running {
@@ -155,11 +218,11 @@ func (s *TesterService) startBatch(total int, feed proxyFeed) error {
 	s.running = true
 	s.mu.Unlock()
 
-	go s.runBatch(ctx, total, feed, cfg)
+	go s.runBatch(ctx, total, feed, cfg, work, apply, concurrency)
 	return nil
 }
 
-func (s *TesterService) runBatch(ctx context.Context, total int, feed proxyFeed, cfg testConfig) {
+func (s *TesterService) runBatch(ctx context.Context, total int, feed proxyFeed, cfg testConfig, work proxyWorker, apply func(TestResult) error, concurrency int) {
 	defer func() {
 		s.mu.Lock()
 		s.running = false
@@ -167,7 +230,7 @@ func (s *TesterService) runBatch(ctx context.Context, total int, feed proxyFeed,
 		s.mu.Unlock()
 	}()
 
-	sem := semaphore.NewWeighted(int64(cfg.concurrency))
+	sem := semaphore.NewWeighted(int64(concurrency))
 	var (
 		wg        sync.WaitGroup
 		statMu    sync.Mutex
@@ -176,8 +239,8 @@ func (s *TesterService) runBatch(ctx context.Context, total int, feed proxyFeed,
 		lastEmit  time.Time
 	)
 
-	// feed блокируется на семафоре при заполнении — это и есть обратное давление
-	// на чтение из БД: в памяти держится не более ~concurrency прокси.
+	// feed блокируется на семафоре при заполнении — это обратное давление на
+	// чтение из БД: в памяти держится не более ~concurrency прокси.
 	feed(ctx, func(p models.Proxy) bool {
 		if ctx.Err() != nil {
 			return false
@@ -190,8 +253,8 @@ func (s *TesterService) runBatch(ctx context.Context, total int, feed proxyFeed,
 			defer wg.Done()
 			defer sem.Release(1)
 
-			result := s.testOne(ctx, p, cfg)
-			if err := s.storage.UpdateTestResult(result); err != nil {
+			result := work(ctx, p, cfg)
+			if err := apply(result); err != nil {
 				result.IsWorking = false
 			}
 
@@ -228,6 +291,7 @@ func (s *TesterService) testConfig() (testConfig, error) {
 		concurrency:     st.TestConcurrency,
 		validateViaHTTP: st.ValidateViaHTTP,
 		validationURL:   st.HTTPValidationURL,
+		speedBytes:      st.SpeedDownloadBytes,
 	}, nil
 }
 
@@ -247,10 +311,22 @@ func (s *TesterService) testOne(ctx context.Context, p models.Proxy, cfg testCon
 	latencyMs := int(time.Since(start).Milliseconds())
 
 	if cfg.validateViaHTTP {
-		if err := s.validateHTTP(ctx, p, cfg, timeout); err != nil {
+		info, err := s.validateHTTP(ctx, p, cfg, timeout)
+		if err != nil {
 			result.Error = err.Error()
 			return result
 		}
+		if info.exitIP != "" {
+			result.ExitIP = &info.exitIP
+		}
+		if info.country != "" {
+			result.Country = &info.country
+		}
+		if info.city != "" {
+			result.City = &info.city
+		}
+		result.Latitude = info.latitude
+		result.Longitude = info.longitude
 	}
 
 	result.IsWorking = true
@@ -258,10 +334,65 @@ func (s *TesterService) testOne(ctx context.Context, p models.Proxy, cfg testCon
 	return result
 }
 
-func (s *TesterService) validateHTTP(ctx context.Context, p models.Proxy, cfg testConfig, timeout time.Duration) error {
+func (s *TesterService) testSpeedOne(ctx context.Context, p models.Proxy, cfg testConfig) TestResult {
+	result := TestResult{ProxyID: p.ID}
+	if !p.IsWorking {
+		result.Error = "прокси нерабочий"
+		return result
+	}
+	timeout := time.Duration(cfg.timeoutMs) * time.Millisecond
 	transport, err := proxyTransport(p.Protocol, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)), timeout)
 	if err != nil {
-		return err
+		result.Error = err.Error()
+		return result
+	}
+	defer transport.CloseIdleConnections()
+
+	client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
+	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	url := fmt.Sprintf(cloudflareSpeedURLFormat, cfg.speedBytes)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+	defer resp.Body.Close()
+
+	start := time.Now()
+	n, err := io.Copy(io.Discard, resp.Body)
+	elapsed := time.Since(start).Seconds()
+	if err != nil && n == 0 {
+		result.Error = err.Error()
+		return result
+	}
+	if elapsed <= 0 {
+		elapsed = 0.001
+	}
+	mbps := float64(n) * 8 / elapsed / 1e6
+	result.DownloadMbps = &mbps
+	result.IsWorking = true
+	return result
+}
+
+type validationInfo struct {
+	exitIP    string
+	country   string
+	city      string
+	latitude  *float64
+	longitude *float64
+}
+
+func (s *TesterService) validateHTTP(ctx context.Context, p models.Proxy, cfg testConfig, timeout time.Duration) (validationInfo, error) {
+	transport, err := proxyTransport(p.Protocol, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)), timeout)
+	if err != nil {
+		return validationInfo{}, err
 	}
 	defer transport.CloseIdleConnections()
 
@@ -271,18 +402,55 @@ func (s *TesterService) validateHTTP(ctx context.Context, p models.Proxy, cfg te
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, cfg.validationURL, nil)
 	if err != nil {
-		return err
+		return validationInfo{}, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return validationInfo{}, err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
+		return validationInfo{}, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	return nil
+	return parseMeta(body), nil
+}
+
+// parseMeta разбирает ответ Cloudflare /meta (JSON) или trace (key=value).
+func parseMeta(body []byte) validationInfo {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		var meta struct {
+			ClientIP  string   `json:"clientIp"`
+			Country   string   `json:"country"`
+			City      string   `json:"city"`
+			Latitude  *float64 `json:"latitude"`
+			Longitude *float64 `json:"longitude"`
+		}
+		if err := json.Unmarshal(trimmed, &meta); err == nil {
+			return validationInfo{
+				exitIP:    meta.ClientIP,
+				country:   strings.ToUpper(meta.Country),
+				city:      meta.City,
+				latitude:  meta.Latitude,
+				longitude: meta.Longitude,
+			}
+		}
+	}
+	var info validationInfo
+	for _, line := range strings.Split(string(body), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		switch strings.TrimSpace(key) {
+		case "ip":
+			info.exitIP = strings.TrimSpace(value)
+		case "loc":
+			info.country = strings.ToUpper(strings.TrimSpace(value))
+		}
+	}
+	return info
 }
 
 func proxyTransport(protocol, addr string, timeout time.Duration) (*http.Transport, error) {

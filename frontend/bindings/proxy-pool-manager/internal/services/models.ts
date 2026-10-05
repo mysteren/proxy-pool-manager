@@ -13,6 +13,17 @@ export interface FetchResult {
 }
 
 /**
+ * MyLocation — местоположение пользователя (для расчёта расстояния до прокси).
+ */
+export interface MyLocation {
+    "ip": string;
+    "country": string;
+    "city"?: string;
+    "latitude"?: number | null;
+    "longitude"?: number | null;
+}
+
+/**
  * Settings — пользовательские настройки приложения (camelCase для фронтенда).
  */
 export interface Settings {
@@ -50,6 +61,11 @@ export interface TestResult {
     "proxyId": number;
     "latencyMs"?: number | null;
     "downloadMbps"?: number | null;
+    "country"?: string | null;
+    "city"?: string | null;
+    "exitIp"?: string | null;
+    "latitude"?: number | null;
+    "longitude"?: number | null;
     "isWorking": boolean;
     "error"?: string;
 }

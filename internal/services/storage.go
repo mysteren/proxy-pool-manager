@@ -140,8 +140,7 @@ func proxyOrder(f models.ProxyFilter) string {
 // GetProxies возвращает страницу пула согласно фильтру.
 func (s *StorageService) GetProxies(f models.ProxyFilter) ([]models.Proxy, error) {
 	where, args := buildProxyWhere(f)
-	query := `SELECT id, host, port, protocol, country, latency_ms, download_mbps,
-		last_checked, is_working, source_id FROM proxies` + where + proxyOrder(f)
+	query := proxyColumns + where + proxyOrder(f)
 
 	limit := f.Limit
 	if limit <= 0 {
@@ -160,18 +159,36 @@ func scanProxyRows(rows *sql.Rows) ([]models.Proxy, error) {
 		var (
 			p         models.Proxy
 			country   sql.NullString
+			city      sql.NullString
+			exitIP    sql.NullString
+			latitude  sql.NullFloat64
+			longitude sql.NullFloat64
 			latency   sql.NullInt64
 			mbps      sql.NullFloat64
 			lastStr   sql.NullString
 			isWorking int
 			sourceID  sql.NullInt64
 		)
-		if err := rows.Scan(&p.ID, &p.Host, &p.Port, &p.Protocol, &country, &latency,
-			&mbps, &lastStr, &isWorking, &sourceID); err != nil {
+		if err := rows.Scan(&p.ID, &p.Host, &p.Port, &p.Protocol, &country, &city, &exitIP,
+			&latitude, &longitude, &latency, &mbps, &lastStr, &isWorking, &sourceID); err != nil {
 			return nil, err
 		}
 		if country.Valid {
 			p.Country = &country.String
+		}
+		if city.Valid {
+			p.City = &city.String
+		}
+		if exitIP.Valid {
+			p.ExitIP = &exitIP.String
+		}
+		if latitude.Valid {
+			v := latitude.Float64
+			p.Latitude = &v
+		}
+		if longitude.Valid {
+			v := longitude.Float64
+			p.Longitude = &v
 		}
 		if latency.Valid {
 			v := int(latency.Int64)
@@ -242,16 +259,33 @@ func toArgs(ids []int64) []any {
 	return args
 }
 
-// UpdateTestResult сохраняет результат проверки прокси.
+// UpdateTestResult сохраняет результат проверки (latency + гео). download_mbps
+// не трогается — за него отвечает отдельный тест скорости.
 func (s *StorageService) UpdateTestResult(r TestResult) error {
 	_, err := s.db.Exec(`UPDATE proxies
-		SET latency_ms = ?, download_mbps = ?, last_checked = CURRENT_TIMESTAMP, is_working = ?
-		WHERE id = ?`, r.LatencyMs, r.DownloadMbps, r.IsWorking, r.ProxyID)
+		SET latency_ms = ?,
+		    country = COALESCE(?, country),
+		    city = COALESCE(?, city),
+		    exit_ip = COALESCE(?, exit_ip),
+		    latitude = COALESCE(?, latitude),
+		    longitude = COALESCE(?, longitude),
+		    last_checked = CURRENT_TIMESTAMP,
+		    is_working = ?
+		WHERE id = ?`,
+		r.LatencyMs, r.Country, r.City, r.ExitIP, r.Latitude, r.Longitude, r.IsWorking, r.ProxyID)
 	return err
 }
 
-const proxyColumns = `SELECT id, host, port, protocol, country, latency_ms, download_mbps,
-	last_checked, is_working, source_id FROM proxies`
+// UpdateSpeedResult сохраняет только результат теста скорости.
+func (s *StorageService) UpdateSpeedResult(r TestResult) error {
+	_, err := s.db.Exec(`UPDATE proxies
+		SET download_mbps = ?, last_checked = CURRENT_TIMESTAMP
+		WHERE id = ?`, r.DownloadMbps, r.ProxyID)
+	return err
+}
+
+const proxyColumns = `SELECT id, host, port, protocol, country, city, exit_ip, latitude, longitude,
+	latency_ms, download_mbps, last_checked, is_working, source_id FROM proxies`
 
 // GetProxyByID возвращает прокси по ID (или nil).
 func (s *StorageService) GetProxyByID(id int64) (*models.Proxy, error) {
