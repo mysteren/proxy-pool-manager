@@ -26,8 +26,6 @@ const (
 	cloudflareMetaURL = "https://speed.cloudflare.com/meta"
 	// cloudflareSpeedURLFormat — endpoint замера скорости.
 	cloudflareSpeedURLFormat = "https://speed.cloudflare.com/__down?bytes=%d"
-	// speedConcurrency — отдельный (меньший) лимит для тестов скорости.
-	speedConcurrency = 10
 )
 
 // TestResult — результат проверки одного прокси.
@@ -88,6 +86,7 @@ type testConfig struct {
 	validationURL   string
 	speedBytes      int
 	speedURL        string
+	measureSpeed    bool
 }
 
 type proxyFeed func(ctx context.Context, yield func(models.Proxy) bool)
@@ -142,17 +141,6 @@ func (s *TesterService) TestNonWorking() error {
 // TestUnchecked проверяет прокси без статуса (ещё не проверенные).
 func (s *TesterService) TestUnchecked() error {
 	return s.startFilterBatch(models.ProxyFilter{Unchecked: boolPtr(true)})
-}
-
-// TestSpeedProxies проверяет скорость скачивания через указанные прокси.
-func (s *TesterService) TestSpeedProxies(ids []int64) error {
-	if len(ids) == 0 {
-		return fmt.Errorf("не выбрано ни одного прокси")
-	}
-	feed := func(ctx context.Context, yield func(models.Proxy) bool) {
-		_ = s.storage.ForEachProxyByIDs(ctx, ids, yield)
-	}
-	return s.startBatch(len(ids), feed, s.testSpeedOne, s.storage.UpdateSpeedResult, speedConcurrency)
 }
 
 // GetMyLocation определяет местоположение пользователя (без прокси).
@@ -294,6 +282,7 @@ func (s *TesterService) testConfig() (testConfig, error) {
 		validationURL:   st.HTTPValidationURL,
 		speedBytes:      st.SpeedDownloadBytes,
 		speedURL:        fmt.Sprintf(cloudflareSpeedURLFormat, st.SpeedDownloadBytes),
+		measureSpeed:    st.SpeedTest,
 	}, nil
 }
 
@@ -331,22 +320,26 @@ func (s *TesterService) testOne(ctx context.Context, p models.Proxy, cfg testCon
 		result.Longitude = info.longitude
 	}
 
+	if cfg.measureSpeed {
+		mbps, err := s.measureSpeed(ctx, p, cfg, timeout)
+		if err != nil {
+			result.Error = err.Error()
+			return result
+		}
+		result.DownloadMbps = mbps
+	}
+
 	result.IsWorking = true
 	result.LatencyMs = &latencyMs
 	return result
 }
 
-func (s *TesterService) testSpeedOne(ctx context.Context, p models.Proxy, cfg testConfig) TestResult {
-	result := TestResult{ProxyID: p.ID}
-	if !p.IsWorking {
-		result.Error = "прокси нерабочий"
-		return result
-	}
-	timeout := time.Duration(cfg.timeoutMs) * time.Millisecond
+// measureSpeed измеряет скорость скачивания через прокси и возвращает Мбит/с.
+// Нулевой размер и ошибки — это ошибка (прокси не пропускает данные).
+func (s *TesterService) measureSpeed(ctx context.Context, p models.Proxy, cfg testConfig, timeout time.Duration) (*float64, error) {
 	transport, err := proxyTransport(p.Protocol, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)), timeout)
 	if err != nil {
-		result.Error = err.Error()
-		return result
+		return nil, err
 	}
 	defer transport.CloseIdleConnections()
 
@@ -360,13 +353,11 @@ func (s *TesterService) testSpeedOne(ctx context.Context, p models.Proxy, cfg te
 	}
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
 	if err != nil {
-		result.Error = err.Error()
-		return result
+		return nil, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		result.Error = err.Error()
-		return result
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -374,20 +365,16 @@ func (s *TesterService) testSpeedOne(ctx context.Context, p models.Proxy, cfg te
 	n, err := io.Copy(io.Discard, resp.Body)
 	elapsed := time.Since(start).Seconds()
 	if err != nil && n == 0 {
-		result.Error = err.Error()
-		return result
+		return nil, err
 	}
 	if n == 0 {
-		result.Error = "нулевая скорость"
-		return result
+		return nil, fmt.Errorf("нулевая скорость")
 	}
 	if elapsed <= 0 {
 		elapsed = 0.001
 	}
 	mbps := float64(n) * 8 / elapsed / 1e6
-	result.DownloadMbps = &mbps
-	result.IsWorking = true
-	return result
+	return &mbps, nil
 }
 
 type validationInfo struct {

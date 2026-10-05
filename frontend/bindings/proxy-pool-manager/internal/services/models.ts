@@ -34,6 +34,11 @@ export interface Settings {
     "copyFormat": string;
     "validateViaHttp": boolean;
     "httpValidationUrl": string;
+
+    /**
+     * SpeedTest включает измерение скорости в ходе обычной проверки.
+     */
+    "speedTest": boolean;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Download, Eraser, Gauge, Play, RefreshCw, Trash2, X } from "lucide-react";
+import { Copy, Download, Eraser, Loader2, Play, RefreshCw, Trash2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,7 @@ export function ProxiesPage() {
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
   const [exportFormat, setExportFormat] = useState("txt");
   const [myLocation, setMyLocation] = useState<MyLocation | null>(null);
+  const [checking, setChecking] = useState<Set<number>>(new Set());
 
   const running = useTestStore((s) => s.running);
   const progressTotal = useTestStore((s) => s.total);
@@ -166,16 +167,24 @@ export function ProxiesPage() {
   };
 
   const handleTestOne = async (id: number) => {
+    setChecking((prev) => new Set(prev).add(id));
     try {
       const result = await TesterService.TestProxy(id);
       if (result.isWorking) {
-        toast.success(`Работает${result.latencyMs != null ? `, ${result.latencyMs} мс` : ""}`);
+        const speed = result.downloadMbps != null ? `, ${result.downloadMbps.toFixed(1)} Мбит/с` : "";
+        toast.success(`Работает${result.latencyMs != null ? `, ${result.latencyMs} мс` : ""}${speed}`);
       } else {
         toast.error(result.error ? `Не работает: ${result.error}` : "Не работает");
       }
       await load();
     } catch (err) {
       toast.error(String(err));
+    } finally {
+      setChecking((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -354,15 +363,6 @@ export function ProxiesPage() {
               Очистить статус
             </Button>
             <div className="ml-auto flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => runBatch(() => TesterService.TestSpeedProxies([...selected]), "Тест скорости запущен")}
-                disabled={running || selected.size === 0}
-              >
-                <Gauge className="size-3.5" />
-                Скорость
-              </Button>
               <Button size="sm" variant="outline" onClick={handleCopy} disabled={selected.size === 0}>
                 <Copy className="size-3.5" />
                 Копировать
@@ -471,7 +471,13 @@ export function ProxiesPage() {
               </tr>
             ) : (
               rows.map((p) => (
-                <tr key={p.id} className="border-b border-border/60 hover:bg-accent/40">
+                <tr
+                  key={p.id}
+                  className={cn(
+                    "border-b border-border/60 hover:bg-accent/40",
+                    checking.has(p.id) && "bg-accent/50",
+                  )}
+                >
                   <td className="px-4 py-2">
                     <input
                       type="checkbox"
@@ -500,8 +506,20 @@ export function ProxiesPage() {
                   <td className="px-4 py-2 text-muted-foreground">{formatDistance(distanceFor(p))}</td>
                   <td className="px-4 py-2 text-muted-foreground">{formatRelative(p.lastChecked)}</td>
                   <td className="px-4 py-2 text-right">
-                    <Button size="sm" variant="ghost" onClick={() => handleTestOne(p.id)} disabled={running}>
-                      Проверить
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleTestOne(p.id)}
+                      disabled={running || checking.has(p.id)}
+                    >
+                      {checking.has(p.id) ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Проверка…
+                        </>
+                      ) : (
+                        "Проверить"
+                      )}
                     </Button>
                   </td>
                 </tr>

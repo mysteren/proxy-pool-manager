@@ -129,6 +129,15 @@ export function SettingsPage() {
                   />
                   Подтверждать работоспособность HTTP-запросом через прокси
                 </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={settings.speedTest}
+                    onChange={(e) => update({ speedTest: e.target.checked })}
+                  />
+                  Измерять скорость при проверке
+                </label>
                 <label className="flex flex-col gap-1 text-sm">
                   URL для проверки
                   <Input

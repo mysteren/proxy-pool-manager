@@ -262,11 +262,11 @@ func toArgs(ids []int64) []any {
 	return args
 }
 
-// UpdateTestResult сохраняет результат проверки (latency + гео). download_mbps
-// не трогается — за него отвечает отдельный тест скорости.
+// UpdateTestResult сохраняет результат проверки (latency, скорость, гео).
 func (s *StorageService) UpdateTestResult(r TestResult) error {
 	_, err := s.db.Exec(`UPDATE proxies
 		SET latency_ms = ?,
+		    download_mbps = ?,
 		    country = COALESCE(?, country),
 		    city = COALESCE(?, city),
 		    exit_ip = COALESCE(?, exit_ip),
@@ -275,16 +275,7 @@ func (s *StorageService) UpdateTestResult(r TestResult) error {
 		    last_checked = CURRENT_TIMESTAMP,
 		    is_working = ?
 		WHERE id = ?`,
-		r.LatencyMs, r.Country, r.City, r.ExitIP, r.Latitude, r.Longitude, r.IsWorking, r.ProxyID)
-	return err
-}
-
-// UpdateSpeedResult сохраняет результат теста скорости и обновляет статус:
-// нулевая скорость означает, что прокси не пропускает данные.
-func (s *StorageService) UpdateSpeedResult(r TestResult) error {
-	_, err := s.db.Exec(`UPDATE proxies
-		SET download_mbps = ?, is_working = ?, last_checked = CURRENT_TIMESTAMP
-		WHERE id = ?`, r.DownloadMbps, r.IsWorking, r.ProxyID)
+		r.LatencyMs, r.DownloadMbps, r.Country, r.City, r.ExitIP, r.Latitude, r.Longitude, r.IsWorking, r.ProxyID)
 	return err
 }
 

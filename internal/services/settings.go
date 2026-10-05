@@ -14,6 +14,7 @@ const (
 	keyCopyFormat         = "copy_format"
 	keyValidateViaHTTP    = "validate_via_http"
 	keyHTTPValidationURL  = "http_validation_url"
+	keySpeedTestEnabled   = "speed_test_enabled"
 )
 
 // Settings — пользовательские настройки приложения (camelCase для фронтенда).
@@ -25,6 +26,8 @@ type Settings struct {
 	CopyFormat         string `json:"copyFormat"`
 	ValidateViaHTTP    bool   `json:"validateViaHttp"`
 	HTTPValidationURL  string `json:"httpValidationUrl"`
+	// SpeedTest включает измерение скорости в ходе обычной проверки.
+	SpeedTest bool `json:"speedTest"`
 }
 
 // DefaultSettings — значения по умолчанию (см. docs/DATA_MODEL.md).
@@ -37,6 +40,7 @@ func DefaultSettings() Settings {
 		CopyFormat:         "uri",
 		ValidateViaHTTP:    true,
 		HTTPValidationURL:  cloudflareMetaURL,
+		SpeedTest:          true,
 	}
 }
 
@@ -96,6 +100,9 @@ func settingsFromMap(values map[string]string) Settings {
 	if v := values[keyHTTPValidationURL]; v != "" {
 		d.HTTPValidationURL = v
 	}
+	if v, ok := values[keySpeedTestEnabled]; ok {
+		d.SpeedTest = v != "false" && v != "0"
+	}
 	return clampSettings(d)
 }
 
@@ -139,6 +146,7 @@ func (s *SettingsService) persist(in Settings) error {
 		keyCopyFormat:         in.CopyFormat,
 		keyValidateViaHTTP:    strconv.FormatBool(in.ValidateViaHTTP),
 		keyHTTPValidationURL:  in.HTTPValidationURL,
+		keySpeedTestEnabled:   strconv.FormatBool(in.SpeedTest),
 	}
 	for key, value := range pairs {
 		if err := s.storage.SetSetting(key, value); err != nil {

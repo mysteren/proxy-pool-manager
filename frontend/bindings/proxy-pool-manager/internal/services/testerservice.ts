@@ -57,13 +57,6 @@ export function TestProxy(id: number): $CancellablePromise<$models.TestResult> {
 }
 
 /**
- * TestSpeedProxies проверяет скорость скачивания через указанные прокси.
- */
-export function TestSpeedProxies(ids: number[] | null): $CancellablePromise<void> {
-    return $Call.ByID(1855816050, ids);
-}
-
-/**
  * TestUnchecked проверяет прокси без статуса (ещё не проверенные).
  */
 export function TestUnchecked(): $CancellablePromise<void> {

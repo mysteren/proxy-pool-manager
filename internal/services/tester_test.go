@@ -160,18 +160,17 @@ func TestSpeedZeroNotWorking(t *testing.T) {
 
 	tester, _, storage := newTestTester(t)
 	id := insertProxy(t, storage, serverProxy(t, srv))
-	mustExec(t, storage, "UPDATE proxies SET is_working = 1 WHERE id = ?", id)
 	p, err := storage.GetProxyByID(id)
 	if err != nil || p == nil {
 		t.Fatal("прокси не найден")
 	}
 
-	res := tester.testSpeedOne(context.Background(), *p, testConfig{timeoutMs: 2000, speedURL: srv.URL, speedBytes: 1024})
-	if res.IsWorking {
-		t.Fatal("нулевая скорость должна означать нерабочий прокси")
+	mbps, err := tester.measureSpeed(context.Background(), *p, testConfig{speedURL: srv.URL, speedBytes: 1024}, 2*time.Second)
+	if err == nil {
+		t.Fatal("нулевая скорость должна быть ошибкой")
 	}
-	if res.DownloadMbps != nil {
-		t.Fatalf("скорость не должна быть задана: %v", *res.DownloadMbps)
+	if mbps != nil {
+		t.Fatalf("скорость не должна быть задана: %v", *mbps)
 	}
 }
 
@@ -184,12 +183,11 @@ func TestSpeedOk(t *testing.T) {
 
 	tester, _, storage := newTestTester(t)
 	id := insertProxy(t, storage, serverProxy(t, srv))
-	mustExec(t, storage, "UPDATE proxies SET is_working = 1 WHERE id = ?", id)
 	p, _ := storage.GetProxyByID(id)
 
-	res := tester.testSpeedOne(context.Background(), *p, testConfig{timeoutMs: 2000, speedURL: srv.URL, speedBytes: 4096})
-	if !res.IsWorking || res.DownloadMbps == nil {
-		t.Fatalf("ожидалась ненулевая скорость: %+v", res)
+	mbps, err := tester.measureSpeed(context.Background(), *p, testConfig{speedURL: srv.URL, speedBytes: 4096}, 2*time.Second)
+	if err != nil || mbps == nil {
+		t.Fatalf("ожидалась ненулевая скорость: mbps=%v err=%v", mbps, err)
 	}
 }
 
