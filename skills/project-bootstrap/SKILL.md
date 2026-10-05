@@ -1,92 +1,107 @@
 ---
 name: project-bootstrap
-description: Инициализация Wails v3 проекта с React + TypeScript, настройка Tailwind CSS и shadcn/ui, базовая тёмная/светлая тема. Используй в начале проекта или при добавлении UI-инфраструктуры.
+description: Инициализация и очистка Wails v3 проекта с React + TypeScript, Tailwind CSS v4, shadcn/ui, layout без роутера и тёмная/светлая тема. Используй в Milestone 1 и при добавлении UI-инфраструктуры.
 ---
 
 # Project Bootstrap
 
 ## Когда использовать
 
-- На старте проекта.
+- На старте проекта (Milestone 1).
 - При добавлении Tailwind, shadcn/ui, провайдера темы.
 - При настройке Wails-биндингов и событий.
 
-## Шаги
+## Принципы
 
-### 1. Инициализация Wails
+- **Минимум зависимостей.** Не добавлять `react-router`, `@tanstack/react-table`,
+  `@tanstack/react-virtual`, `date-fns`, `sonner`. Роутер не нужен (три страницы
+  переключаются состоянием), таблица — серверная пагинация, относительное время —
+  встроенный `Intl.RelativeTimeFormat`, тост — свой маленький компонент.
+- **shadcn/ui** — это не библиотека, а скопированные в репозиторий компоненты.
+  Их можно править и заменять.
+- **Стек:** `react`, `react-dom`, `tailwindcss` (v4) + `@tailwindcss/vite`,
+  зависимости shadcn (`@radix-ui/*`, `class-variance-authority`, `clsx`,
+  `tailwind-merge`, `lucide-react`), `zustand`.
+
+## Шаги Milestone 1
+
+### 1. Очистка шаблона
+
+Шаблон `wails3 init -t react-ts` уже создан. Нужно убрать демо:
+
+- `greetservice.go` — удалить.
+- `main.go` — убрать `GreetService`, событие `time`, заполнить
+  `Name`/`Description`, заголовок окна, убрать демо-горутину.
+- Переименовать Go-модуль (`go.mod`: `module changeme` → осмысленное имя),
+  удалить демо-биндинги в `frontend/bindings/`, `frontend/src/App.tsx`
+  переписать с нуля.
+- Заполнить `build/config.yml` (`info.companyName`, `productName`,
+  `productIdentifier`, `description`, `copyright`, `version`).
+
+### 2. Tailwind CSS v4
+
+В `frontend/`:
 
 ```bash
-wails3 init -n proxy-pool-manager -t react-ts
-cd proxy-pool-manager
-wails3 dev  # проверка, что всё запускается
+npm install -D tailwindcss @tailwindcss/vite
 ```
 
-### 2. Tailwind CSS
-
-Установить в `frontend/`:
-
-```bash
-npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
-```
-
-Настроить `tailwind.config.js`:
-
-- `content: ['./index.html', './src/**/*.{ts,tsx}']`
-- `darkMode: 'class'`
-- Расширить `theme` цветами через CSS-переменные (см. shadcn/ui).
-
-Добавить в `src/index.css`:
-
-- Директивы `@tailwind base; @tailwind components; @tailwind utilities;`
-- CSS-переменные для светлой и тёмной темы (`.dark { ... }`).
+- В `vite.config.ts` добавить плагин `@tailwindcss/vite`.
+- В `src/index.css` — `@import "tailwindcss";`, CSS-переменные светлой темы
+  в `:root`, тёмной — в `.dark`.
+- v4 не требует `tailwind.config.js` и `postcss.config.js` по умолчанию
+  (конфиг — CSS-first через `@theme`).
 
 ### 3. shadcn/ui
 
 ```bash
 npx shadcn@latest init
-npx shadcn@latest add button input table checkbox dialog dropdown-menu toast sonner
+npx shadcn@latest add button input table checkbox dialog dropdown-menu separator
 ```
 
 Компоненты окажутся в `src/components/ui/`.
 
-### 4. ThemeProvider (React)
+### 4. Layout (без роутера)
 
-- Создать `src/stores/themeStore.ts` на Zustand:
-  - Состояние: `theme: 'system' | 'light' | 'dark'`.
-  - Экшены: `setTheme`, `applyTheme`.
-  - `applyTheme` управляет классом `dark` на `document.documentElement`.
+- `src/components/layout/Sidebar.tsx` — 240px, пункты «Прокси», «Источники»,
+  «Настройки»; переключают `activePage` в Zustand.
+- `src/components/layout/AppLayout.tsx` — sidebar + main area.
+- `src/stores/uiStore.ts` — `activePage: 'proxies' | 'sources' | 'settings'`.
+- `App.tsx` рендерит страницу по `activePage`. Никаких URL и роутера.
 
-- В `App.tsx`:
-  - При монтировании — вызвать `GetSystemTheme()` из Wails-биндингов.
-  - Подписаться на событие `theme:changed`.
-  - При изменении — обновить store.
+### 5. ThemeStore (React)
 
-### 5. Go: ThemeService
+- `src/stores/themeStore.ts` (Zustand):
+  - состояние `mode: 'system' | 'light' | 'dark'` и `resolved: 'light' | 'dark'`;
+  - `setMode`, `setResolved`;
+  - применение — класс `dark` на `document.documentElement`.
+- В `App.tsx` при монтировании — `GetSystemTheme()` из биндингов,
+  подписка на событие `theme:changed`.
+- В `index.html` — inline-скрипт, выставляющий `dark` до рендера React
+  (чтобы не было мерцания).
 
-- Метод `GetSystemTheme() string` — возвращает `light` или `dark`
-  на основе `app.Env.IsDarkMode()`.
-- Подписка на `events.Common.ThemeChanged` в `main.go`:
-  - При срабатывании — эмитить `theme:changed` на фронтенд.
+### 6. Go: ThemeService
 
-### 6. Layout
-
-- Sidebar слева (240px): «Прокси», «Источники», «Настройки».
-- Main area: рендер текущей страницы.
-- Использовать `react-router-dom` (HashRouter — рекомендуется для Wails).
+- Метод `GetSystemTheme() string` на основе `app.Env.IsDarkMode()`
+  (подтверждено в Wails v3 beta.27).
+- В `main.go` подписка на `events.Common.ThemeChanged`; при срабатывании —
+  `app.Event.Emit("theme:changed", theme)`.
+- Кастомные события регистрировать через `application.RegisterEvent[T]`,
+  чтобы получить типизированный TS-API.
 
 ## Проверка
 
-- [ ] `wails3 dev` запускается.
+- [ ] `wails3 dev` запускается, демо-кода нет.
 - [ ] Переключение системной темы (GNOME: Настройки → Внешний вид) меняет
       тему приложения без перезапуска.
-- [ ] В Настройках есть ручной выбор темы.
+- [ ] В Настройках есть ручной выбор темы (System / Light / Dark).
 - [ ] `wails3 build` проходит.
 
 ## Частые ошибки
 
 - **Не работает переключение темы:** проверить, что класс `dark` ставится
   на `<html>`, а не на `<body>`.
-- **Событие не приходит:** проверить, что эмиссия идёт через
-  `app.Event.Emit("theme:changed", theme)` и на фронте слушается
-  `window.runtime.EventsOn("theme:changed", ...)`.
+- **Событие не приходит:** эмиссия через `app.Event.Emit("theme:changed", theme)`,
+  на фронте — `Events.On("theme:changed", ...)`.
+- **Проблемы с Tailwind v4:** если shadcn/ui несовместим — временно откатиться
+  на v3 (`tailwindcss init -p`, `postcss.config.js`, `darkMode: 'class'`).

@@ -44,17 +44,18 @@
 
 ### React Frontend
 
-- **Страницы:**
+- **Страницы** (переключаются без роутера — поле `activePage` в Zustand):
   - `Proxies` — таблица пула прокси (центральный экран).
   - `Sources` — управление источниками.
   - `Settings` — тема, конкурентность, таймауты, формат копирования.
 - **Стейт:** Zustand (простота, минимум бойлерплейта).
-- **UI:** Tailwind CSS + shadcn/ui.
-- **Таблица:** TanStack Table + TanStack Virtual.
+- **UI:** Tailwind CSS v4 + shadcn/ui.
+- **Таблица:** без внешних table/virtual-библиотек — серверная пагинация,
+  сортировка на бэкенде, лёгкая собственная таблица.
 
 ### Коммуникация
 
-- **RPC (фронт → бэк):** Wails-биндинги, авто-генерация TS-типов в `frontend/wailsjs/`.
+- **RPC (фронт → бэк):** Wails-биндинги, авто-генерация TS-типов в `frontend/bindings/`.
 - **События (бэк → фронт):**
   - `test:progress` — прогресс массового теста.
   - `test:completed` — завершение теста (одиночного/массового).
@@ -69,10 +70,15 @@
    `~/.local/share/proxy-pool-manager/data.db` (Linux).
 3. **Тяжёлые операции — асинхронно с контекстом.** Отмена теста через
    `context.CancelFunc`, сохранённый в TesterService.
-4. **Дедупликация на двух уровнях.** При парсинге (in-memory) и при вставке
-   в БД (UNIQUE constraint на `host + port`).
+4. **Дедупликация на двух уровнях.** При парсинге (in-memory, ключ
+   `protocol://host:port`) и при вставке в БД (UNIQUE constraint на
+   `host + port + protocol`).
 5. **Никаких системных вызовов.** Никаких `iptables`, `gsettings`, `nftables`.
    Приложение — это чистый менеджер пула.
+6. **Честная проверка.** Рабочий прокси подтверждается лёгким HTTP-запросом
+   через сам прокси, а не только TCP-connect (см. TESTING_STRATEGY.md).
+7. **Буфер обмена — через Go** (`app.Clipboard.SetText`), а не
+   `navigator.clipboard`: надёжнее в WebView на GNOME/KDE.
 
 ## Директории
 
@@ -101,7 +107,7 @@ proxy-pool-manager/
 │   │   │   └── utils.ts
 │   │   ├── App.tsx
 │   │   └── main.tsx
-│   └── wailsjs/            # авто-генерация
+│   └── bindings/           # авто-генерация Wails
 ├── internal/
 │   ├── services/
 │   │   ├── source.go
@@ -117,23 +123,24 @@ proxy-pool-manager/
 │       └── migrations/
 ├── main.go
 ├── go.mod
-└── wails.json
+└── build/config.yml    # конфиг Wails v3 (вместо wails.json)
 ```
 
 ## Зависимости (Go)
 
 - `modernc.org/sqlite` — SQLite без CGO.
-- `github.com/google/uuid` — ID для источников.
+- `github.com/adrg/xdg` — кросс-платформенные пути к данным.
 - `golang.org/x/sync/semaphore` — ограничение конкурентности.
-- `golang.org/x/net/proxy` — подключение через SOCKS5/HTTP прокси.
+- `golang.org/x/net/proxy` — подключение через SOCKS5.
+
+(ID источников и прокси — `INTEGER AUTOINCREMENT`, `uuid` не нужен.)
 
 ## Зависимости (Frontend)
 
 - `react`, `react-dom`, `typescript`, `vite`.
-- `tailwindcss`, `postcss`, `autoprefixer`.
-- `shadcn/ui` (компоненты копируются в проект).
-- `zustand` — стейт.
-- `@tanstack/react-table`, `@tanstack/react-virtual` — таблица.
-- `lucide-react` — иконки.
-- `sonner` — тосты.
-- `@radix-ui/*` — примитивы (через shadcn/ui).
+- `tailwindcss` v4 (+ `@tailwindcss/vite`).
+- `shadcn/ui` — компоненты копируются в проект (тянет `@radix-ui/*`,
+  `class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react`).
+- `zustand` — стейт и `activePage`.
+- Относительное время — встроенный `Intl.RelativeTimeFormat` (без `date-fns`).
+- Тосты — маленький собственный компонент (без внешней библиотеки).

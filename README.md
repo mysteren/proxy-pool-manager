@@ -1,59 +1,51 @@
-# Welcome to Your New Wails3 Project!
+# Proxy Pool Manager
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+Десктопное приложение для сбора, проверки и управления пулом рабочих прокси.
 
-## Getting Started
+Приложение загружает списки прокси из внешних источников (URL) или из ручного
+ввода, проверяет их на работоспособность и скорость, сохраняет рабочие прокси
+в локальный пул. Пул можно фильтровать, сортировать, копировать в буфер обмена
+и экспортировать в файлы для использования в браузерах, `yt-dlp`, `curl`
+и других приложениях.
 
-1. Navigate to your project directory in the terminal.
+**Приложение НЕ управляет системным прокси.** Пользователь сам применяет
+скопированные прокси в своих инструментах.
 
-2. To run your application in development mode, use the following command:
+## Стек
 
-   ```
-   wails3 dev
-   ```
+- **Wails v3** — десктопный фреймворк (Go + WebView)
+- **Go 1.25+** — бэкенд, сетевые операции, SQLite
+- **React 18 + TypeScript** — фронтенд
+- **Vite** — сборка фронтенда
+- **Tailwind CSS v4 + shadcn/ui** — UI, темы
+- **SQLite** (`modernc.org/sqlite`, без CGO) — локальное хранилище пула
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+## Быстрый старт
 
-3. To build your application for production, use:
+Требования: Go 1.25+, Node.js 18+, Wails v3 Beta (`wails3 version`).
 
-   ```
-   wails3 build
-   ```
+```bash
+wails3 dev     # запуск в режиме разработки
+wails3 build   # сборка релиза
+```
 
-   This will create a production-ready executable in the `build` directory.
+## Документация
 
-## Exploring Wails3 Features
+Вся документация — в [`docs/`](docs/README.md):
 
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
+- [REQUIREMENTS.md](docs/REQUIREMENTS.md) — функциональные и нефункциональные требования
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — архитектура приложения
+- [DATA_MODEL.md](docs/DATA_MODEL.md) — модель данных и схема БД
+- [UI_GUIDELINES.md](docs/UI_GUIDELINES.md) — правила интерфейса
+- [TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md) — стратегия тестирования
+- [ROADMAP.md](docs/ROADMAP.md) — этапы разработки
+- [AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) — работа с агентом через Zed
 
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
+## Статус
 
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
+Активная разработка. Первая цель — стабильная версия для Linux (GNOME/KDE),
+затем macOS и Windows.
 
-   ```
-   go run .
-   ```
+## Лицензия
 
-   Note: Some examples may be under development during the alpha phase.
-
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
-
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
-
-## Project Structure
-
-Take a moment to familiarize yourself with your project structure:
-
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
-
-## Next Steps
-
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
-
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
+MIT

@@ -73,16 +73,27 @@ https://203.0.113.5:3128
   - Если ошибка — попробовать JSONL (построчно).
   - Для каждого объекта взять `ip`, `port`, первый из `protocols`, `country`.
 
+### 3.1. Нормализация протоколов (MVP)
+
+Поддерживаются только `http` и `socks5`:
+
+- `https` → **нормализовать в `http`** (в бесплатных списках `https` — это
+  HTTP-прокси с поддержкой CONNECT, он нам подходит).
+- `socks4` → **пропустить** (Go `x/net/proxy` умеет только SOCKS5).
+- Неизвестный/пустой протокол → считать `http`.
+- `host` приводить к нижнему регистру.
+
 ### 4. Дедупликация
 
-- In-memory: `map[string]struct{}` по ключу `host:port`.
-- В БД: `INSERT OR IGNORE` с UNIQUE constraint на `(host, port)`.
+- In-memory: `map[string]struct{}` по ключу `protocol://host:port`.
+- В БД: `INSERT OR IGNORE` с UNIQUE constraint на `(host, port, protocol)`.
+- Детект дубликата — по `RowsAffected() == 0`, **не** по `LastInsertId == 0`.
 
 ### 5. Сохранение
 
 - Транзакция на весь батч.
 - Prepared statement для вставки.
-- Обновить `sources.last_fetched`, `sources.proxy_count`.
+- Обновить `sources.last_fetched`.
 
 ### 6. Эмиссия события
 
@@ -127,3 +138,5 @@ type FetchResult struct {
   Использовать `raw.githubusercontent.com`.
 - **Прокси с портом 0** — отбрасывать.
 - **Дубликаты с разным регистром host** — нормализовать к нижнему регистру.
+- **`https`/`socks4` в источнике** — `https` → `http`, `socks4` пропускать
+  (см. Нормализацию протоколов).

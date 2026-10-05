@@ -16,7 +16,7 @@
 - **Go 1.25+** — бэкенд, сетевые операции, SQLite
 - **React 18 + TypeScript** — фронтенд
 - **Vite** — сборка фронтенда
-- **Tailwind CSS + shadcn/ui** — UI, темы
+- **Tailwind CSS v4 + shadcn/ui** — UI, темы
 - **SQLite** — локальное хранилище пула прокси
 
 ## Быстрый старт
