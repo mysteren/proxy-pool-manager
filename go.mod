@@ -5,6 +5,8 @@ go 1.26.0
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/wailsapp/wails/v3 v3.0.0-beta.27
+	golang.org/x/net v0.59.0
+	golang.org/x/sync v0.23.0
 	modernc.org/sqlite v1.60.1
 )
 

@@ -138,13 +138,12 @@ func (s *StorageService) GetProxies(f models.ProxyFilter) ([]models.Proxy, error
 	query += " LIMIT ? OFFSET ?"
 	args = append(args, limit, f.Offset)
 
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+	return s.queryProxies(query, args...)
+}
 
-	proxies := make([]models.Proxy, 0, limit)
+// scanProxyRows читает строки выборки прокси.
+func scanProxyRows(rows *sql.Rows) ([]models.Proxy, error) {
+	proxies := make([]models.Proxy, 0)
 	for rows.Next() {
 		var (
 			p         models.Proxy
@@ -180,6 +179,16 @@ func (s *StorageService) GetProxies(f models.ProxyFilter) ([]models.Proxy, error
 	return proxies, rows.Err()
 }
 
+// queryProxies выполняет запрос выборки прокси с общим сканированием.
+func (s *StorageService) queryProxies(query string, args ...any) ([]models.Proxy, error) {
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanProxyRows(rows)
+}
+
 // CountProxies возвращает общее число строк под фильтр (без пагинации).
 func (s *StorageService) CountProxies(f models.ProxyFilter) (int, error) {
 	where, args := buildProxyWhere(f)
@@ -204,6 +213,63 @@ func (s *StorageService) DeleteProxies(ids []int64) error {
 	query := "DELETE FROM proxies WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 	_, err := s.db.Exec(query, args...)
 	return err
+}
+
+// UpdateTestResult сохраняет результат проверки прокси.
+func (s *StorageService) UpdateTestResult(r TestResult) error {
+	_, err := s.db.Exec(`UPDATE proxies
+		SET latency_ms = ?, download_mbps = ?, last_checked = CURRENT_TIMESTAMP, is_working = ?
+		WHERE id = ?`, r.LatencyMs, r.DownloadMbps, r.IsWorking, r.ProxyID)
+	return err
+}
+
+const proxyColumns = `SELECT id, host, port, protocol, country, latency_ms, download_mbps,
+	last_checked, is_working, source_id FROM proxies`
+
+// GetProxyByID возвращает прокси по ID (или nil).
+func (s *StorageService) GetProxyByID(id int64) (*models.Proxy, error) {
+	proxies, err := s.queryProxies(proxyColumns+" WHERE id = ?", id)
+	if err != nil {
+		return nil, err
+	}
+	if len(proxies) == 0 {
+		return nil, nil
+	}
+	return &proxies[0], nil
+}
+
+// GetProxiesByIDs возвращает прокси по списку ID.
+func (s *StorageService) GetProxiesByIDs(ids []int64) ([]models.Proxy, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := proxyColumns + " WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+	return s.queryProxies(query, args...)
+}
+
+// ListProxyIDs возвращает ID прокси под фильтр (для массовой проверки).
+func (s *StorageService) ListProxyIDs(f models.ProxyFilter) ([]int64, error) {
+	where, args := buildProxyWhere(f)
+	rows, err := s.db.Query("SELECT id FROM proxies"+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 const sourceSelect = `SELECT s.id, s.name, s.url, s.file_path, s.last_fetched, s.created_at,
@@ -328,4 +394,22 @@ func (s *StorageService) SetSetting(key, value string) error {
 	_, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	return err
+}
+
+// AllSettings возвращает все настройки как map.
+func (s *StorageService) AllSettings() (map[string]string, error) {
+	rows, err := s.db.Query("SELECT key, value FROM settings")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	values := make(map[string]string)
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, err
+		}
+		values[key] = value
+	}
+	return values, rows.Err()
 }

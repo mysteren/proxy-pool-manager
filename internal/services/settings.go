@@ -1,0 +1,149 @@
+package services
+
+import (
+	"strconv"
+	"strings"
+)
+
+// Ключи настроек в таблице settings.
+const (
+	keyTheme              = "theme"
+	keyLatencyTimeoutMs   = "latency_timeout_ms"
+	keySpeedDownloadBytes = "speed_download_bytes"
+	keyTestConcurrency    = "test_concurrency"
+	keyCopyFormat         = "copy_format"
+	keyValidateViaHTTP    = "validate_via_http"
+	keyHTTPValidationURL  = "http_validation_url"
+)
+
+// Settings — пользовательские настройки приложения (camelCase для фронтенда).
+type Settings struct {
+	Theme              string `json:"theme"`
+	LatencyTimeoutMs   int    `json:"latencyTimeoutMs"`
+	SpeedDownloadBytes int    `json:"speedDownloadBytes"`
+	TestConcurrency    int    `json:"testConcurrency"`
+	CopyFormat         string `json:"copyFormat"`
+	ValidateViaHTTP    bool   `json:"validateViaHttp"`
+	HTTPValidationURL  string `json:"httpValidationUrl"`
+}
+
+// DefaultSettings — значения по умолчанию (см. docs/DATA_MODEL.md).
+func DefaultSettings() Settings {
+	return Settings{
+		Theme:              "system",
+		LatencyTimeoutMs:   5000,
+		SpeedDownloadBytes: 1000000,
+		TestConcurrency:    50,
+		CopyFormat:         "uri",
+		ValidateViaHTTP:    true,
+		HTTPValidationURL:  "https://api.ipify.org?format=json",
+	}
+}
+
+// SettingsService читает и сохраняет настройки.
+type SettingsService struct {
+	storage *StorageService
+}
+
+func NewSettingsService(storage *StorageService) *SettingsService {
+	return &SettingsService{storage: storage}
+}
+
+// Get возвращает настройки с подстановкой значений по умолчанию.
+func (s *SettingsService) Get() (Settings, error) {
+	values, err := s.storage.AllSettings()
+	if err != nil {
+		return Settings{}, err
+	}
+	return settingsFromMap(values), nil
+}
+
+// Update валидирует и сохраняет настройки, возвращает итоговое состояние.
+func (s *SettingsService) Update(in Settings) (Settings, error) {
+	in = clampSettings(in)
+	if err := s.persist(in); err != nil {
+		return Settings{}, err
+	}
+	return s.Get()
+}
+
+func settingsFromMap(values map[string]string) Settings {
+	d := DefaultSettings()
+	if v := values[keyTheme]; v != "" {
+		d.Theme = v
+	}
+	if v, ok := values[keyLatencyTimeoutMs]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			d.LatencyTimeoutMs = n
+		}
+	}
+	if v, ok := values[keySpeedDownloadBytes]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			d.SpeedDownloadBytes = n
+		}
+	}
+	if v, ok := values[keyTestConcurrency]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			d.TestConcurrency = n
+		}
+	}
+	if v := values[keyCopyFormat]; v != "" {
+		d.CopyFormat = v
+	}
+	if v, ok := values[keyValidateViaHTTP]; ok {
+		d.ValidateViaHTTP = v != "false" && v != "0"
+	}
+	if v := values[keyHTTPValidationURL]; v != "" {
+		d.HTTPValidationURL = v
+	}
+	return clampSettings(d)
+}
+
+// clampSettings держит числовые поля в разумных границах.
+func clampSettings(s Settings) Settings {
+	if s.LatencyTimeoutMs < 500 {
+		s.LatencyTimeoutMs = 500
+	}
+	if s.LatencyTimeoutMs > 60000 {
+		s.LatencyTimeoutMs = 60000
+	}
+	if s.TestConcurrency < 1 {
+		s.TestConcurrency = 1
+	}
+	if s.TestConcurrency > 500 {
+		s.TestConcurrency = 500
+	}
+	if s.SpeedDownloadBytes < 100_000 {
+		s.SpeedDownloadBytes = 100_000
+	}
+	if s.SpeedDownloadBytes > 10_000_000 {
+		s.SpeedDownloadBytes = 10_000_000
+	}
+	switch s.CopyFormat {
+	case "uri", "hostport":
+	default:
+		s.CopyFormat = "uri"
+	}
+	if strings.TrimSpace(s.HTTPValidationURL) == "" {
+		s.HTTPValidationURL = DefaultSettings().HTTPValidationURL
+	}
+	return s
+}
+
+func (s *SettingsService) persist(in Settings) error {
+	pairs := map[string]string{
+		keyTheme:              in.Theme,
+		keyLatencyTimeoutMs:   strconv.Itoa(in.LatencyTimeoutMs),
+		keySpeedDownloadBytes: strconv.Itoa(in.SpeedDownloadBytes),
+		keyTestConcurrency:    strconv.Itoa(in.TestConcurrency),
+		keyCopyFormat:         in.CopyFormat,
+		keyValidateViaHTTP:    strconv.FormatBool(in.ValidateViaHTTP),
+		keyHTTPValidationURL:  in.HTTPValidationURL,
+	}
+	for key, value := range pairs {
+		if err := s.storage.SetSetting(key, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -11,3 +11,45 @@ export interface FetchResult {
     "skipped": number;
     "errors"?: string[] | null;
 }
+
+/**
+ * Settings — пользовательские настройки приложения (camelCase для фронтенда).
+ */
+export interface Settings {
+    "theme": string;
+    "latencyTimeoutMs": number;
+    "speedDownloadBytes": number;
+    "testConcurrency": number;
+    "copyFormat": string;
+    "validateViaHttp": boolean;
+    "httpValidationUrl": string;
+}
+
+/**
+ * TestCompleted — итог массовой проверки.
+ */
+export interface TestCompleted {
+    "cancelled": boolean;
+    "tested": number;
+    "working": number;
+}
+
+/**
+ * TestProgress — прогресс массовой проверки.
+ */
+export interface TestProgress {
+    "total": number;
+    "completed": number;
+    "current": string;
+}
+
+/**
+ * TestResult — результат проверки одного прокси.
+ */
+export interface TestResult {
+    "proxyId": number;
+    "latencyMs"?: number | null;
+    "downloadMbps"?: number | null;
+    "isWorking": boolean;
+    "error"?: string;
+}

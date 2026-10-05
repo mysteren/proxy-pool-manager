@@ -13,6 +13,8 @@ declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
             "source:fetched": services$0.FetchResult;
+            "test:completed": services$0.TestCompleted;
+            "test:progress": services$0.TestProgress;
             "theme:changed": string;
         }
     }

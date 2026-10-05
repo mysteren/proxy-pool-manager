@@ -19,6 +19,8 @@ func init() {
 	// Типизированные события: генератор биндингов даст фронтенду типизированный TS-API.
 	application.RegisterEvent[string]("theme:changed")
 	application.RegisterEvent[services.FetchResult]("source:fetched")
+	application.RegisterEvent[services.TestProgress]("test:progress")
+	application.RegisterEvent[services.TestCompleted]("test:completed")
 }
 
 func main() {
@@ -29,8 +31,11 @@ func main() {
 	defer database.Close()
 
 	storage := services.NewStorageService(database)
+	settings := services.NewSettingsService(storage)
 	themeService := services.NewThemeService()
 	sourceService := services.NewSourceService(storage)
+	proxyService := services.NewProxyService(storage)
+	testerService := services.NewTesterService(storage, settings)
 
 	app := application.New(application.Options{
 		Name:        "Proxy Pool Manager",
@@ -38,6 +43,9 @@ func main() {
 		Services: []application.Service{
 			application.NewService(themeService),
 			application.NewService(sourceService),
+			application.NewService(proxyService),
+			application.NewService(testerService),
+			application.NewService(settings),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
