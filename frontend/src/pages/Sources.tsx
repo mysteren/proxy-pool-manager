@@ -46,8 +46,12 @@ export function SourcesPage() {
   }, [load]);
 
   const reportResult = (result: FetchResult) => {
+    if (result.fetched > 0 && result.added === 0) {
+      toast.info(`Все ${result.fetched} прокси уже в пуле`);
+      return;
+    }
     toast.success(
-      `Загружено ${result.fetched}, добавлено ${result.added}, пропущено ${result.skipped}`,
+      `Добавлено ${result.added} из ${result.fetched} (уже в пуле: ${result.skipped})`,
     );
   };
 

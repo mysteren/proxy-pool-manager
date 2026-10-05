@@ -266,6 +266,32 @@ func (s *StorageService) GetSource(id int64) (*models.Source, error) {
 	return &src, nil
 }
 
+// FindSourceByURL возвращает источник с таким URL или nil.
+func (s *StorageService) FindSourceByURL(url string) (*models.Source, error) {
+	row := s.db.QueryRow(sourceSelect+" WHERE s.url = ? LIMIT 1", url)
+	src, err := scanSource(row.Scan)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &src, nil
+}
+
+// FindSourceByFilePath возвращает источник с таким путём к файлу или nil.
+func (s *StorageService) FindSourceByFilePath(path string) (*models.Source, error) {
+	row := s.db.QueryRow(sourceSelect+" WHERE s.file_path = ? LIMIT 1", path)
+	src, err := scanSource(row.Scan)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &src, nil
+}
+
 // CreateSource создаёт источник и возвращает его ID.
 func (s *StorageService) CreateSource(name string, url, filePath *string) (int64, error) {
 	res, err := s.db.Exec("INSERT INTO sources (name, url, file_path) VALUES (?, ?, ?)", name, url, filePath)
