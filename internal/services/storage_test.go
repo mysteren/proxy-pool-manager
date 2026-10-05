@@ -98,6 +98,33 @@ func TestGetProxiesFilterSortPaginate(t *testing.T) {
 	}
 }
 
+func TestSortByDownloadNullsLast(t *testing.T) {
+	s := newTestStorage(t)
+	if _, err := s.InsertProxies([]models.ParsedProxy{
+		{Host: "a", Port: 1, Protocol: "http"},
+		{Host: "b", Port: 2, Protocol: "http"},
+		{Host: "c", Port: 3, Protocol: "http"},
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, s, "UPDATE proxies SET download_mbps = 5 WHERE host = 'a'")
+	mustExec(t, s, "UPDATE proxies SET download_mbps = 20 WHERE host = 'b'")
+
+	got, err := s.GetProxies(models.ProxyFilter{SortBy: "download", SortDir: "desc", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("получено %d, ожидалось 3", len(got))
+	}
+	if got[0].Host != "b" || got[1].Host != "a" {
+		t.Fatalf("сортировка по скорости неверна: %+v", got)
+	}
+	if got[2].DownloadMbps != nil {
+		t.Fatalf("строка без скорости должна быть последней: %+v", got[2])
+	}
+}
+
 func TestDeleteSourceSetsNull(t *testing.T) {
 	s := newTestStorage(t)
 	url := "https://example.com/list.txt"

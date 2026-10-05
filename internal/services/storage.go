@@ -78,9 +78,12 @@ func (s *StorageService) InsertProxies(proxies []models.ParsedProxy, sourceID *i
 
 var proxySortColumns = map[string]string{
 	"latency":     "latency_ms",
+	"download":    "download_mbps",
 	"host":        "host",
 	"port":        "port",
 	"protocol":    "protocol",
+	"country":     "country",
+	"city":        "city",
 	"lastChecked": "last_checked",
 	"id":          "id",
 }
@@ -130,11 +133,11 @@ func proxyOrder(f models.ProxyFilter) string {
 	if strings.EqualFold(f.SortDir, "desc") {
 		dir = "DESC"
 	}
-	// NULL latency всегда в конце, независимо от направления.
-	if column == "latency_ms" {
-		return fmt.Sprintf(" ORDER BY latency_ms IS NULL, latency_ms %s", dir)
+	// Числовые метрики: строки с пустым значением всегда в конце, вторичный порядок — по id.
+	if column == "latency_ms" || column == "download_mbps" {
+		return fmt.Sprintf(" ORDER BY %s IS NULL, %s %s, id ASC", column, column, dir)
 	}
-	return fmt.Sprintf(" ORDER BY %s %s", column, dir)
+	return fmt.Sprintf(" ORDER BY %s %s, id ASC", column, dir)
 }
 
 // GetProxies возвращает страницу пула согласно фильтру.

@@ -37,7 +37,7 @@ export function ProxiesPage() {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
-  const [sortBy, setSortBy] = useState("host");
+  const [sortBy, setSortBy] = useState("latency");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -437,12 +437,18 @@ export function ProxiesPage() {
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("protocol")}>
                 Протокол{sortIndicator("protocol")}
               </th>
-              <th className="px-4 py-2 font-medium">Страна</th>
-              <th className="px-4 py-2 font-medium">Город</th>
-              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("latency")}>
-                Latency{sortIndicator("latency")}
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("country")}>
+                Страна{sortIndicator("country")}
               </th>
-              <th className="px-4 py-2 font-medium">Скорость</th>
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("city")}>
+                Город{sortIndicator("city")}
+              </th>
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("latency")}>
+                Пинг{sortIndicator("latency")}
+              </th>
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("download")}>
+                Скорость{sortIndicator("download")}
+              </th>
               <th className="px-4 py-2 font-medium">Расстояние</th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("lastChecked")}>
                 Проверен{sortIndicator("lastChecked")}
