@@ -1,4 +1,4 @@
-module changeme
+module proxy-pool-manager
 
 go 1.25.0
 
