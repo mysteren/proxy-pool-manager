@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -128,5 +130,90 @@ func TestDeleteSourceSetsNull(t *testing.T) {
 	}
 	if got[0].SourceID != nil {
 		t.Fatalf("ожидался source_id = NULL, получено %v", *got[0].SourceID)
+	}
+}
+
+// TestChunkedByIDs проверяет работу с большим числом ID (лимит переменных SQLite).
+func TestChunkedByIDs(t *testing.T) {
+	s := newTestStorage(t)
+	const n = 1500
+	proxies := make([]models.ParsedProxy, n)
+	for i := range proxies {
+		proxies[i] = models.ParsedProxy{Host: fmt.Sprintf("h%d.example", i), Port: 1000 + i, Protocol: "http"}
+	}
+	added, err := s.InsertProxies(proxies, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added != n {
+		t.Fatalf("added=%d, ожидалось %d", added, n)
+	}
+
+	rows, err := s.GetProxies(models.ProxyFilter{Limit: n + 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]int64, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+
+	got, err := s.GetProxiesByIDs(ids)
+	if err != nil {
+		t.Fatalf("GetProxiesByIDs: %v", err)
+	}
+	if len(got) != n {
+		t.Fatalf("GetProxiesByIDs вернул %d, ожидалось %d", len(got), n)
+	}
+
+	mustExec(t, s, "UPDATE proxies SET is_working = 1, latency_ms = 42")
+	cleared, err := s.ClearStatusByIDs(ids)
+	if err != nil {
+		t.Fatalf("ClearStatusByIDs: %v", err)
+	}
+	if cleared != n {
+		t.Fatalf("cleared=%d, ожидалось %d", cleared, n)
+	}
+
+	if err := s.DeleteProxies(ids); err != nil {
+		t.Fatalf("DeleteProxies: %v", err)
+	}
+	count, err := s.CountProxies(models.ProxyFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("после удаления count=%d, ожидалось 0", count)
+	}
+}
+
+func TestForEachProxyAndClearStatus(t *testing.T) {
+	s := newTestStorage(t)
+	proxies := make([]models.ParsedProxy, 5)
+	for i := range proxies {
+		proxies[i] = models.ParsedProxy{Host: fmt.Sprintf("f%d.example", i), Port: 2000 + i, Protocol: "http"}
+	}
+	if _, err := s.InsertProxies(proxies, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	seen := 0
+	if err := s.ForEachProxy(context.Background(), models.ProxyFilter{}, 2, func(models.Proxy) bool {
+		seen++
+		return true
+	}); err != nil {
+		t.Fatalf("ForEachProxy: %v", err)
+	}
+	if seen != 5 {
+		t.Fatalf("ForEachProxy просмотрел %d, ожидалось 5", seen)
+	}
+
+	mustExec(t, s, "UPDATE proxies SET is_working = 1, latency_ms = 10 WHERE host = 'f0.example'")
+	cleared, err := s.ClearStatus(models.ProxyFilter{OnlyWorking: boolPtr(true)})
+	if err != nil {
+		t.Fatalf("ClearStatus: %v", err)
+	}
+	if cleared != 1 {
+		t.Fatalf("ClearStatus сбросил %d, ожидалось 1", cleared)
 	}
 }

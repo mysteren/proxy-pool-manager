@@ -23,6 +23,11 @@ export interface Proxy {
  */
 export interface ProxyFilter {
     "onlyWorking"?: boolean | null;
+
+    /**
+     * true: last_checked IS NULL; false: IS NOT NULL
+     */
+    "unchecked"?: boolean | null;
     "protocol"?: string | null;
     "maxLatency"?: number | null;
     "country"?: string | null;

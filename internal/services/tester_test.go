@@ -152,9 +152,12 @@ func TestRunBatchCancelReturns(t *testing.T) {
 	defer timer.Stop()
 
 	cfg := testConfig{timeoutMs: 5000, concurrency: 5, validateViaHTTP: true}
+	feed := func(feedCtx context.Context, yield func(models.Proxy) bool) {
+		_ = storage.ForEachProxy(feedCtx, models.ProxyFilter{}, 500, yield)
+	}
 	done := make(chan struct{})
 	go func() {
-		tester.runBatch(ctx, proxies, cfg)
+		tester.runBatch(ctx, len(proxies), feed, cfg)
 		close(done)
 	}()
 

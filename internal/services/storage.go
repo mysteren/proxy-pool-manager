@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -87,8 +88,19 @@ var proxySortColumns = map[string]string{
 func buildProxyWhere(f models.ProxyFilter) (string, []any) {
 	query := " WHERE 1=1"
 	args := []any{}
-	if f.OnlyWorking != nil && *f.OnlyWorking {
-		query += " AND is_working = 1"
+	if f.OnlyWorking != nil {
+		if *f.OnlyWorking {
+			query += " AND is_working = 1"
+		} else {
+			query += " AND is_working = 0"
+		}
+	}
+	if f.Unchecked != nil {
+		if *f.Unchecked {
+			query += " AND last_checked IS NULL"
+		} else {
+			query += " AND last_checked IS NOT NULL"
+		}
 	}
 	if f.Protocol != nil && *f.Protocol != "" {
 		query += " AND protocol = ?"
@@ -199,20 +211,35 @@ func (s *StorageService) CountProxies(f models.ProxyFilter) (int, error) {
 	return count, nil
 }
 
-// DeleteProxies удаляет прокси по ID.
+// DeleteProxies удаляет прокси по ID (чанками, чтобы не упереться в лимит переменных SQLite).
 func (s *StorageService) DeleteProxies(ids []int64) error {
-	if len(ids) == 0 {
-		return nil
+	for start := 0; start < len(ids); start += idChunkSize {
+		end := min(start+idChunkSize, len(ids))
+		batch := ids[start:end]
+		query := "DELETE FROM proxies WHERE id IN (" + placeholders(len(batch)) + ")"
+		if _, err := s.db.Exec(query, toArgs(batch)...); err != nil {
+			return err
+		}
 	}
-	placeholders := make([]string, len(ids))
+	return nil
+}
+
+// idChunkSize — размер порции для IN (...) и постраничной выборки.
+const idChunkSize = 400
+
+func placeholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return strings.Repeat("?,", n-1) + "?"
+}
+
+func toArgs(ids []int64) []any {
 	args := make([]any, len(ids))
 	for i, id := range ids {
-		placeholders[i] = "?"
 		args[i] = id
 	}
-	query := "DELETE FROM proxies WHERE id IN (" + strings.Join(placeholders, ",") + ")"
-	_, err := s.db.Exec(query, args...)
-	return err
+	return args
 }
 
 // UpdateTestResult сохраняет результат проверки прокси.
@@ -238,19 +265,23 @@ func (s *StorageService) GetProxyByID(id int64) (*models.Proxy, error) {
 	return &proxies[0], nil
 }
 
-// GetProxiesByIDs возвращает прокси по списку ID.
+// GetProxiesByIDs возвращает прокси по списку ID (чанками).
 func (s *StorageService) GetProxiesByIDs(ids []int64) ([]models.Proxy, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	placeholders := make([]string, len(ids))
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		placeholders[i] = "?"
-		args[i] = id
+	out := make([]models.Proxy, 0, len(ids))
+	for start := 0; start < len(ids); start += idChunkSize {
+		end := min(start+idChunkSize, len(ids))
+		batch := ids[start:end]
+		query := proxyColumns + " WHERE id IN (" + placeholders(len(batch)) + ")"
+		proxies, err := s.queryProxies(query, toArgs(batch)...)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, proxies...)
 	}
-	query := proxyColumns + " WHERE id IN (" + strings.Join(placeholders, ",") + ")"
-	return s.queryProxies(query, args...)
+	return out, nil
 }
 
 // ListProxyIDs возвращает ID прокси под фильтр (для массовой проверки).
@@ -270,6 +301,91 @@ func (s *StorageService) ListProxyIDs(f models.ProxyFilter) ([]int64, error) {
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// ForEachProxy пролистывает прокси под фильтр страницами (keyset по id),
+// не загружая весь пул в память. fn возвращает false для остановки.
+func (s *StorageService) ForEachProxy(ctx context.Context, f models.ProxyFilter, pageSize int, fn func(models.Proxy) bool) error {
+	if pageSize <= 0 {
+		pageSize = 500
+	}
+	where, baseArgs := buildProxyWhere(f)
+	lastID := int64(0)
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		query := proxyColumns + where
+		args := append([]any{}, baseArgs...)
+		if lastID > 0 {
+			query += " AND id > ?"
+			args = append(args, lastID)
+		}
+		query += " ORDER BY id ASC LIMIT ?"
+		args = append(args, pageSize)
+
+		proxies, err := s.queryProxies(query, args...)
+		if err != nil {
+			return err
+		}
+		if len(proxies) == 0 {
+			return nil
+		}
+		for _, p := range proxies {
+			if !fn(p) {
+				return nil
+			}
+		}
+		lastID = proxies[len(proxies)-1].ID
+	}
+}
+
+// ForEachProxyByIDs пролистывает прокси по списку ID чанками.
+func (s *StorageService) ForEachProxyByIDs(ctx context.Context, ids []int64, fn func(models.Proxy) bool) error {
+	for start := 0; start < len(ids); start += idChunkSize {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		end := min(start+idChunkSize, len(ids))
+		proxies, err := s.GetProxiesByIDs(ids[start:end])
+		if err != nil {
+			return err
+		}
+		for _, p := range proxies {
+			if !fn(p) {
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+// ClearStatus сбрасывает результат проверки у прокси под фильтр.
+func (s *StorageService) ClearStatus(f models.ProxyFilter) (int, error) {
+	where, args := buildProxyWhere(f)
+	res, err := s.db.Exec("UPDATE proxies SET latency_ms = NULL, download_mbps = NULL, last_checked = NULL, is_working = 0"+where, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
+// ClearStatusByIDs сбрасывает результат проверки у указанных прокси (чанками).
+func (s *StorageService) ClearStatusByIDs(ids []int64) (int, error) {
+	total := 0
+	for start := 0; start < len(ids); start += idChunkSize {
+		end := min(start+idChunkSize, len(ids))
+		batch := ids[start:end]
+		query := "UPDATE proxies SET latency_ms = NULL, download_mbps = NULL, last_checked = NULL, is_working = 0 WHERE id IN (" + placeholders(len(batch)) + ")"
+		res, err := s.db.Exec(query, toArgs(batch)...)
+		if err != nil {
+			return total, err
+		}
+		n, _ := res.RowsAffected()
+		total += int(n)
+	}
+	return total, nil
 }
 
 const sourceSelect = `SELECT s.id, s.name, s.url, s.file_path, s.last_fetched, s.created_at,

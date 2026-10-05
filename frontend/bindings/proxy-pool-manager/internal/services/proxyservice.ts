@@ -15,6 +15,20 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as models$0 from "../models/models.js";
 
 /**
+ * ClearStatus сбрасывает результат проверки у прокси под фильтр.
+ */
+export function ClearStatus(f: models$0.ProxyFilter): $CancellablePromise<number> {
+    return $Call.ByID(1523580093, f);
+}
+
+/**
+ * ClearStatusByIDs сбрасывает результат проверки у указанных прокси.
+ */
+export function ClearStatusByIDs(ids: number[] | null): $CancellablePromise<number> {
+    return $Call.ByID(1189830502, ids);
+}
+
+/**
  * CountProxies возвращает общее число прокси под фильтр.
  */
 export function CountProxies(f: models$0.ProxyFilter): $CancellablePromise<number> {

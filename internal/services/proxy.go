@@ -25,3 +25,13 @@ func (s *ProxyService) CountProxies(f models.ProxyFilter) (int, error) {
 func (s *ProxyService) DeleteProxies(ids []int64) error {
 	return s.storage.DeleteProxies(ids)
 }
+
+// ClearStatus сбрасывает результат проверки у прокси под фильтр.
+func (s *ProxyService) ClearStatus(f models.ProxyFilter) (int, error) {
+	return s.storage.ClearStatus(f)
+}
+
+// ClearStatusByIDs сбрасывает результат проверки у указанных прокси.
+func (s *ProxyService) ClearStatusByIDs(ids []int64) (int, error) {
+	return s.storage.ClearStatusByIDs(ids)
+}

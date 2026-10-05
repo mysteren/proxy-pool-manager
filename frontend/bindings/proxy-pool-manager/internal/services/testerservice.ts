@@ -22,14 +22,21 @@ export function Cancel(): $CancellablePromise<void> {
 }
 
 /**
- * TestNonWorking запускает проверку всех нерабочих прокси (асинхронно).
+ * TestAll проверяет весь пул (асинхронно, потоково).
+ */
+export function TestAll(): $CancellablePromise<void> {
+    return $Call.ByID(2824689950);
+}
+
+/**
+ * TestNonWorking проверяет проверенные, но нерабочие прокси (асинхронно).
  */
 export function TestNonWorking(): $CancellablePromise<void> {
     return $Call.ByID(1060913449);
 }
 
 /**
- * TestProxies запускает массовую проверку указанных прокси (асинхронно).
+ * TestProxies запускает проверку указанных прокси (асинхронно).
  */
 export function TestProxies(ids: number[] | null): $CancellablePromise<void> {
     return $Call.ByID(603970985, ids);
@@ -40,4 +47,11 @@ export function TestProxies(ids: number[] | null): $CancellablePromise<void> {
  */
 export function TestProxy(id: number): $CancellablePromise<$models.TestResult> {
     return $Call.ByID(3310604085, id);
+}
+
+/**
+ * TestUnchecked проверяет прокси без статуса (ещё не проверенные).
+ */
+export function TestUnchecked(): $CancellablePromise<void> {
+    return $Call.ByID(859781429);
 }

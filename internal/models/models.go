@@ -40,6 +40,7 @@ type ParsedProxy struct {
 // Пагинация серверная; общее число строк возвращает CountProxies.
 type ProxyFilter struct {
 	OnlyWorking *bool   `json:"onlyWorking,omitempty"`
+	Unchecked   *bool   `json:"unchecked,omitempty"` // true: last_checked IS NULL; false: IS NOT NULL
 	Protocol    *string `json:"protocol,omitempty"`
 	MaxLatency  *int    `json:"maxLatency,omitempty"`
 	Country     *string `json:"country,omitempty"`

@@ -62,6 +62,11 @@ type testConfig struct {
 	validationURL   string
 }
 
+// proxyFeed отдаёт прокси порциями, не загружая весь пул в память.
+type proxyFeed func(ctx context.Context, yield func(models.Proxy) bool)
+
+func boolPtr(b bool) *bool { return &b }
+
 // TestProxy проверяет один прокси синхронно и сохраняет результат.
 func (s *TesterService) TestProxy(id int64) (TestResult, error) {
 	p, err := s.storage.GetProxyByID(id)
@@ -85,27 +90,30 @@ func (s *TesterService) TestProxy(id int64) (TestResult, error) {
 	return result, nil
 }
 
-// TestProxies запускает массовую проверку указанных прокси (асинхронно).
+// TestProxies запускает проверку указанных прокси (асинхронно).
 func (s *TesterService) TestProxies(ids []int64) error {
-	proxies, err := s.storage.GetProxiesByIDs(ids)
-	if err != nil {
-		return err
+	if len(ids) == 0 {
+		return fmt.Errorf("не выбрано ни одного прокси")
 	}
-	return s.startBatch(proxies)
+	feed := func(ctx context.Context, yield func(models.Proxy) bool) {
+		_ = s.storage.ForEachProxyByIDs(ctx, ids, yield)
+	}
+	return s.startBatch(len(ids), feed)
 }
 
-// TestNonWorking запускает проверку всех нерабочих прокси (асинхронно).
+// TestAll проверяет весь пул (асинхронно, потоково).
+func (s *TesterService) TestAll() error {
+	return s.startFilterBatch(models.ProxyFilter{})
+}
+
+// TestNonWorking проверяет проверенные, но нерабочие прокси (асинхронно).
 func (s *TesterService) TestNonWorking() error {
-	notWorking := false
-	ids, err := s.storage.ListProxyIDs(models.ProxyFilter{OnlyWorking: &notWorking})
-	if err != nil {
-		return err
-	}
-	proxies, err := s.storage.GetProxiesByIDs(ids)
-	if err != nil {
-		return err
-	}
-	return s.startBatch(proxies)
+	return s.startFilterBatch(models.ProxyFilter{OnlyWorking: boolPtr(false), Unchecked: boolPtr(false)})
+}
+
+// TestUnchecked проверяет прокси без статуса (ещё не проверенные).
+func (s *TesterService) TestUnchecked() error {
+	return s.startFilterBatch(models.ProxyFilter{Unchecked: boolPtr(true)})
 }
 
 // Cancel останавливает активную массовую проверку.
@@ -118,7 +126,21 @@ func (s *TesterService) Cancel() {
 	}
 }
 
-func (s *TesterService) startBatch(proxies []models.Proxy) error {
+func (s *TesterService) startFilterBatch(filter models.ProxyFilter) error {
+	total, err := s.storage.CountProxies(filter)
+	if err != nil {
+		return err
+	}
+	if total == 0 {
+		return fmt.Errorf("нет прокси для проверки")
+	}
+	feed := func(ctx context.Context, yield func(models.Proxy) bool) {
+		_ = s.storage.ForEachProxy(ctx, filter, 500, yield)
+	}
+	return s.startBatch(total, feed)
+}
+
+func (s *TesterService) startBatch(total int, feed proxyFeed) error {
 	cfg, err := s.testConfig()
 	if err != nil {
 		return err
@@ -133,11 +155,11 @@ func (s *TesterService) startBatch(proxies []models.Proxy) error {
 	s.running = true
 	s.mu.Unlock()
 
-	go s.runBatch(ctx, proxies, cfg)
+	go s.runBatch(ctx, total, feed, cfg)
 	return nil
 }
 
-func (s *TesterService) runBatch(ctx context.Context, proxies []models.Proxy, cfg testConfig) {
+func (s *TesterService) runBatch(ctx context.Context, total int, feed proxyFeed, cfg testConfig) {
 	defer func() {
 		s.mu.Lock()
 		s.running = false
@@ -145,9 +167,7 @@ func (s *TesterService) runBatch(ctx context.Context, proxies []models.Proxy, cf
 		s.mu.Unlock()
 	}()
 
-	total := len(proxies)
 	sem := semaphore.NewWeighted(int64(cfg.concurrency))
-
 	var (
 		wg        sync.WaitGroup
 		statMu    sync.Mutex
@@ -156,12 +176,14 @@ func (s *TesterService) runBatch(ctx context.Context, proxies []models.Proxy, cf
 		lastEmit  time.Time
 	)
 
-	for i := range proxies {
+	// feed блокируется на семафоре при заполнении — это и есть обратное давление
+	// на чтение из БД: в памяти держится не более ~concurrency прокси.
+	feed(ctx, func(p models.Proxy) bool {
 		if ctx.Err() != nil {
-			break
+			return false
 		}
 		if err := sem.Acquire(ctx, 1); err != nil {
-			break
+			return false
 		}
 		wg.Add(1)
 		go func(p models.Proxy) {
@@ -187,8 +209,9 @@ func (s *TesterService) runBatch(ctx context.Context, proxies []models.Proxy, cf
 				})
 			}
 			statMu.Unlock()
-		}(proxies[i])
-	}
+		}(p)
+		return true
+	})
 	wg.Wait()
 
 	emitTestProgress(TestProgress{Total: total, Completed: completed})
