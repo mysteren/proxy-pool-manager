@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Events } from "@wailsio/runtime";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { Toaster } from "@/components/ui/toaster";
 import { ProxiesPage } from "@/pages/Proxies";
 import { SourcesPage } from "@/pages/Sources";
 import { SettingsPage } from "@/pages/Settings";
@@ -28,10 +29,13 @@ export default function App() {
   }, [setSystemTheme]);
 
   return (
-    <AppLayout>
-      {activePage === "proxies" && <ProxiesPage />}
-      {activePage === "sources" && <SourcesPage />}
-      {activePage === "settings" && <SettingsPage />}
-    </AppLayout>
+    <>
+      <AppLayout>
+        {activePage === "proxies" && <ProxiesPage />}
+        {activePage === "sources" && <SourcesPage />}
+        {activePage === "settings" && <SettingsPage />}
+      </AppLayout>
+      <Toaster />
+    </>
   );
 }
