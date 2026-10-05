@@ -279,11 +279,12 @@ func (s *StorageService) UpdateTestResult(r TestResult) error {
 	return err
 }
 
-// UpdateSpeedResult сохраняет только результат теста скорости.
+// UpdateSpeedResult сохраняет результат теста скорости и обновляет статус:
+// нулевая скорость означает, что прокси не пропускает данные.
 func (s *StorageService) UpdateSpeedResult(r TestResult) error {
 	_, err := s.db.Exec(`UPDATE proxies
-		SET download_mbps = ?, last_checked = CURRENT_TIMESTAMP
-		WHERE id = ?`, r.DownloadMbps, r.ProxyID)
+		SET download_mbps = ?, is_working = ?, last_checked = CURRENT_TIMESTAMP
+		WHERE id = ?`, r.DownloadMbps, r.IsWorking, r.ProxyID)
 	return err
 }
 

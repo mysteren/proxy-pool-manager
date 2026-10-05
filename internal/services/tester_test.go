@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"net/http"
@@ -134,6 +135,89 @@ func TestTestProxyFailure(t *testing.T) {
 	}
 	if res.IsWorking {
 		t.Fatal("ожидался нерабочий прокси")
+	}
+}
+
+func serverProxy(t *testing.T, srv *httptest.Server) models.ParsedProxy {
+	t.Helper()
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, portStr, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, _ := strconv.Atoi(portStr)
+	return models.ParsedProxy{Host: host, Port: port, Protocol: "http"}
+}
+
+func TestSpeedZeroNotWorking(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK) // пустое тело
+	}))
+	defer srv.Close()
+
+	tester, _, storage := newTestTester(t)
+	id := insertProxy(t, storage, serverProxy(t, srv))
+	mustExec(t, storage, "UPDATE proxies SET is_working = 1 WHERE id = ?", id)
+	p, err := storage.GetProxyByID(id)
+	if err != nil || p == nil {
+		t.Fatal("прокси не найден")
+	}
+
+	res := tester.testSpeedOne(context.Background(), *p, testConfig{timeoutMs: 2000, speedURL: srv.URL, speedBytes: 1024})
+	if res.IsWorking {
+		t.Fatal("нулевая скорость должна означать нерабочий прокси")
+	}
+	if res.DownloadMbps != nil {
+		t.Fatalf("скорость не должна быть задана: %v", *res.DownloadMbps)
+	}
+}
+
+func TestSpeedOk(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(bytes.Repeat([]byte("x"), 4096))
+	}))
+	defer srv.Close()
+
+	tester, _, storage := newTestTester(t)
+	id := insertProxy(t, storage, serverProxy(t, srv))
+	mustExec(t, storage, "UPDATE proxies SET is_working = 1 WHERE id = ?", id)
+	p, _ := storage.GetProxyByID(id)
+
+	res := tester.testSpeedOne(context.Background(), *p, testConfig{timeoutMs: 2000, speedURL: srv.URL, speedBytes: 4096})
+	if !res.IsWorking || res.DownloadMbps == nil {
+		t.Fatalf("ожидалась ненулевая скорость: %+v", res)
+	}
+}
+
+func TestValidationEmptyBodyNotWorking(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer target.Close()
+	proxySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK) // пустой ответ
+	}))
+	defer proxySrv.Close()
+
+	tester, settings, storage := newTestTester(t)
+	saveSettings(t, settings, Settings{
+		Theme:             "system",
+		LatencyTimeoutMs:  1000,
+		TestConcurrency:   5,
+		CopyFormat:        "uri",
+		ValidateViaHTTP:   true,
+		HTTPValidationURL: target.URL,
+	})
+	id := insertProxy(t, storage, serverProxy(t, proxySrv))
+
+	res, err := tester.TestProxy(id)
+	if err != nil {
+		t.Fatalf("TestProxy: %v", err)
+	}
+	if res.IsWorking {
+		t.Fatal("пустой ответ прокси должен считаться нерабочим")
 	}
 }
 

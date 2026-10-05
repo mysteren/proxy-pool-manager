@@ -87,6 +87,7 @@ type testConfig struct {
 	validateViaHTTP bool
 	validationURL   string
 	speedBytes      int
+	speedURL        string
 }
 
 type proxyFeed func(ctx context.Context, yield func(models.Proxy) bool)
@@ -292,6 +293,7 @@ func (s *TesterService) testConfig() (testConfig, error) {
 		validateViaHTTP: st.ValidateViaHTTP,
 		validationURL:   st.HTTPValidationURL,
 		speedBytes:      st.SpeedDownloadBytes,
+		speedURL:        fmt.Sprintf(cloudflareSpeedURLFormat, st.SpeedDownloadBytes),
 	}, nil
 }
 
@@ -352,7 +354,10 @@ func (s *TesterService) testSpeedOne(ctx context.Context, p models.Proxy, cfg te
 	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	url := fmt.Sprintf(cloudflareSpeedURLFormat, cfg.speedBytes)
+	url := cfg.speedURL
+	if url == "" {
+		url = fmt.Sprintf(cloudflareSpeedURLFormat, cfg.speedBytes)
+	}
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
 	if err != nil {
 		result.Error = err.Error()
@@ -370,6 +375,10 @@ func (s *TesterService) testSpeedOne(ctx context.Context, p models.Proxy, cfg te
 	elapsed := time.Since(start).Seconds()
 	if err != nil && n == 0 {
 		result.Error = err.Error()
+		return result
+	}
+	if n == 0 {
+		result.Error = "нулевая скорость"
 		return result
 	}
 	if elapsed <= 0 {
@@ -412,6 +421,9 @@ func (s *TesterService) validateHTTP(ctx context.Context, p models.Proxy, cfg te
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return validationInfo{}, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	if len(body) == 0 {
+		return validationInfo{}, fmt.Errorf("пустой ответ прокси")
 	}
 	return parseMeta(body), nil
 }
