@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=proxy-pool-manager
+Exec=proxy-pool-manager
+Icon=proxy-pool-manager
+Categories=Development;
+Terminal=false
+Keywords=wails
+Version=1.0
+StartupNotify=false

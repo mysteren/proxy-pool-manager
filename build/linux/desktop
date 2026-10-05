@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=My Product
+Comment=A proxy-pool-manager application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/proxy-pool-manager %u
+Terminal=false
+Type=Application
+Icon=proxy-pool-manager
+Categories=Utility;
+StartupWMClass=proxy-pool-manager
+
+ 
