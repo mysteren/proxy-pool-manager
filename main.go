@@ -34,7 +34,7 @@ func main() {
 	settings := services.NewSettingsService(storage)
 	themeService := services.NewThemeService()
 	sourceService := services.NewSourceService(storage)
-	proxyService := services.NewProxyService(storage)
+	proxyService := services.NewProxyService(storage, settings)
 	testerService := services.NewTesterService(storage, settings)
 
 	app := application.New(application.Options{

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Eraser, Play, RefreshCw, Trash2, X } from "lucide-react";
+import { Copy, Download, Eraser, Play, RefreshCw, Trash2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ export function ProxiesPage() {
   const [maxLatency, setMaxLatency] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
+  const [exportFormat, setExportFormat] = useState("txt");
 
   const running = useTestStore((s) => s.running);
   const progressTotal = useTestStore((s) => s.total);
@@ -197,6 +198,31 @@ export function ProxiesPage() {
     }
   };
 
+  const handleCopy = async () => {
+    try {
+      const count = await ProxyService.CopyToClipboard([...selected]);
+      toast.success(`Скопировано: ${count}`);
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const path = await ProxyService.PickExportPath(exportFormat);
+      if (!path) {
+        return;
+      }
+      const count =
+        selected.size > 0
+          ? await ProxyService.ExportByIDs([...selected], exportFormat, path)
+          : await ProxyService.ExportByFilter(buildFilter(0), exportFormat, path);
+      toast.success(`Экспортировано: ${count}`);
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
   const sortIndicator = (column: string) =>
     sortBy === column ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
@@ -312,16 +338,35 @@ export function ProxiesPage() {
               <Eraser className="size-3.5" />
               Очистить статус
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="ml-auto"
-              onClick={() => setConfirm({ kind: "delete", label: `Удалить ${selected.size} выбранных?` })}
-              disabled={selected.size === 0}
-            >
-              <Trash2 className="size-3.5" />
-              Удалить
-            </Button>
+            <div className="ml-auto flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={handleCopy} disabled={selected.size === 0}>
+                <Copy className="size-3.5" />
+                Копировать
+              </Button>
+              <select
+                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value)}
+                aria-label="Формат экспорта"
+              >
+                <option value="txt">TXT</option>
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+              </select>
+              <Button size="sm" variant="outline" onClick={handleExport}>
+                <Download className="size-3.5" />
+                Экспорт
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirm({ kind: "delete", label: `Удалить ${selected.size} выбранных?` })}
+                disabled={selected.size === 0}
+              >
+                <Trash2 className="size-3.5" />
+                Удалить
+              </Button>
+            </div>
           </>
         )}
       </div>
