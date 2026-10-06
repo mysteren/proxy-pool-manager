@@ -1,11 +1,12 @@
 [Desktop Entry]
 Type=Application
-Name=proxy-pool-manager
+Name=Proxy Pool Manager
 Exec=proxy-pool-manager
 Icon=proxy-pool-manager
-Categories=Development;
+Categories=Network;Development;
+Comment=Сбор, проверка и управление пулом прокси
 Terminal=false
-Keywords=wails
+Keywords=proxy;socks;http;mtproto;telegram;
 Version=1.0
 StartupNotify=false
 StartupWMClass=proxy-pool-manager
