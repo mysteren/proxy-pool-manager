@@ -340,7 +340,7 @@ export function MTProtoPage() {
           ))}
         </div>
         <select
-          className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
         >
@@ -604,7 +604,7 @@ export function MTProtoPage() {
           <label className="flex items-center gap-2">
             На странице:
             <select
-              className="h-8 rounded-md border border-input bg-transparent px-2"
+              className="h-8 rounded-md border border-input bg-background px-2 text-foreground"
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
             >

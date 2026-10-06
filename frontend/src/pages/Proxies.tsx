@@ -370,7 +370,7 @@ export function ProxiesPage() {
           ))}
         </div>
         <select
-          className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
           value={protocol}
           onChange={(e) => setProtocol(e.target.value)}
         >
@@ -379,7 +379,7 @@ export function ProxiesPage() {
           <option value="socks5">socks5</option>
         </select>
         <select
-          className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
           value={maxLatency}
           onChange={(e) => setMaxLatency(e.target.value)}
         >
@@ -645,7 +645,7 @@ export function ProxiesPage() {
           <label className="flex items-center gap-2">
             На странице:
             <select
-              className="h-8 rounded-md border border-input bg-transparent px-2"
+              className="h-8 rounded-md border border-input bg-background px-2 text-foreground"
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
             >

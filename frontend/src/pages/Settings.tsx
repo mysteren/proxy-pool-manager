@@ -152,7 +152,7 @@ export function SettingsPage() {
                 <label className="flex flex-col gap-1 text-sm">
                   Формат
                   <select
-                    className="h-9 w-56 rounded-md border border-input bg-transparent px-2 text-sm"
+                    className="h-9 w-56 rounded-md border border-input bg-background px-2 text-sm text-foreground"
                     value={settings.copyFormat}
                     onChange={(e) => update({ copyFormat: e.target.value })}
                   >
