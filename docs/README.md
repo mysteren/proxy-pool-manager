@@ -38,8 +38,8 @@ wails3 dev
 wails3 build
 ```
 
-Пакеты для установки в систему (deb/rpm/AppImage/Arch — Linux, .app/.dmg — macOS)
-см. [BUILD.md](BUILD.md).
+Пакеты для установки в систему (deb/rpm/AppImage/Arch — Linux, NSIS/MSIX — Windows,
+.app/.dmg — macOS) см. [BUILD.md](BUILD.md).
 
 ## Документация
 
@@ -48,7 +48,7 @@ wails3 build
 - [DATA_MODEL.md](DATA_MODEL.md) — модель данных и схема БД
 - [UI_GUIDELINES.md](UI_GUIDELINES.md) — правила интерфейса
 - [TESTING_STRATEGY.md](TESTING_STRATEGY.md) — стратегия тестирования
-- [BUILD.md](BUILD.md) — сборка и упаковка для Linux/macOS
+- [BUILD.md](BUILD.md) — сборка и упаковка для Linux/Windows/macOS
 - [ROADMAP.md](ROADMAP.md) — этапы разработки
 - [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) — работа с агентом через Zed
 

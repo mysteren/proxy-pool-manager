@@ -135,6 +135,62 @@ wails3 task darwin:package:universal
 Получится `bin/proxy-pool-manager.app` без code signing. Подписать и нотаризовать
 его нужно на macOS перед распространением (`codesign:skip` при кросс-сборке).
 
+## Windows
+
+Windows-версию **можно собрать прямо на Linux** — без Docker и без
+кросс-тулчейна. Приложение использует pure-Go SQLite (`modernc.org/sqlite`), а
+Windows-бэкенд Wails работает через WebView2, поэтому CGO не требуется.
+
+### Бинарник (кросс-компиляция с Linux)
+
+```bash
+wails3 task windows:build              # bin/proxy-pool-manager.exe (amd64)
+wails3 task windows:build ARCH=arm64   # для ARM64
+```
+
+Проверено на Linux: на выходе `PE32+ executable for MS Windows (GUI), x86-64`.
+Задача сама генерирует `.syso` (иконка, манифест, версия) через
+`wails3 generate syso`, поэтому метаданные `.exe` берутся из
+`build/windows/info.json` и `build/windows/wails.exe.manifest`.
+
+Если какому-то коду понадобится CGO, задача переключится на Docker-сборку
+(`CGO_ENABLED=1`):
+
+```bash
+wails3 task setup:docker               # образ wails-cross (~800 МБ, однократно)
+wails3 task windows:build CGO_ENABLED=1
+```
+
+### Установщик
+
+NSIS (по умолчанию):
+
+```bash
+wails3 task windows:package                     # установка для всех пользователей
+wails3 task windows:package INSTALL_SCOPE=user  # для текущего пользователя
+```
+
+Требуется `makensis` (Debian/Ubuntu: `sudo apt install nsis`). Дополнительно
+скачивается WebView2 bootstrapper, чтобы установщик не зависел от наличия
+WebView2 в системе. Результат — `build/windows/nsis/proxy-pool-manager-installer.exe`.
+
+MSIX (альтернативный формат):
+
+```bash
+wails3 task install:msix:tools          # ставит инструменты упаковки
+wails3 task windows:package FORMAT=msix
+```
+
+### Подпись
+
+```bash
+wails3 task windows:sign                # подписать .exe
+wails3 task windows:sign:installer      # подписать установщик
+```
+
+Нужен сертификат Authenticode (настраивается через `wails3 setup`). Без подписи
+Windows SmartScreen показывает предупреждение при запуске.
+
 ## Метаданные приложения
 
 Правится в:
@@ -144,5 +200,7 @@ wails3 task darwin:package:universal
 - `build/linux/nfpm/nfpm.yaml` — описание пакета, maintainer, homepage, содержимое.
 - `build/darwin/Info.plist` и `Info.dev.plist` — `CFBundleName`,
   `CFBundleIdentifier`, версии, копирайт.
+- `build/windows/info.json` и `wails.exe.manifest` — `CompanyName`,
+  `ProductName`, `FileDescription`, `LegalCopyright`, имя сборки.
 - `build/linux/Taskfile.yml` (задача `generate:dotdesktop`) — `Name`, `Comment`,
   `Categories`, `Keywords` генерируемого `.desktop`.
