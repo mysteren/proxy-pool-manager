@@ -64,6 +64,10 @@ type MTProtoProxy struct {
 	Secret      string     `json:"secret,omitempty"`
 	Type        string     `json:"type"` // mtproto | socks
 	PingMs      *int       `json:"pingMs,omitempty"`
+	JitterMs    *int       `json:"jitterMs,omitempty"`
+	Successes   int        `json:"successes"`
+	Attempts    int        `json:"attempts"`
+	Score       *float64   `json:"score,omitempty"`
 	Method      string     `json:"method,omitempty"`
 	IsWorking   bool       `json:"isWorking"`
 	LastChecked *time.Time `json:"lastChecked,omitempty"`

@@ -8,7 +8,8 @@ import (
 	"proxy-pool-manager/internal/models"
 )
 
-const mtprotoColumns = `SELECT id, host, port, secret, tg_type, ping_ms, method, is_working, last_checked, source_id
+const mtprotoColumns = `SELECT id, host, port, secret, tg_type, ping_ms, jitter_ms, successes, attempts, score,
+	method, is_working, last_checked, source_id
 	FROM mtproto_proxies`
 
 // InsertMTProto вставляет Telegram-прокси одной транзакцией.
@@ -78,6 +79,9 @@ func buildMTProtoWhere(f models.MTProtoFilter) (string, []any) {
 
 var mtprotoSortColumns = map[string]string{
 	"ping":        "ping_ms",
+	"jitter":      "jitter_ms",
+	"score":       "score",
+	"success":     "successes",
 	"host":        "host",
 	"port":        "port",
 	"lastChecked": "last_checked",
@@ -93,8 +97,8 @@ func mtprotoOrder(f models.MTProtoFilter) string {
 	if strings.EqualFold(f.SortDir, "desc") {
 		dir = "DESC"
 	}
-	if column == "ping_ms" {
-		return " ORDER BY ping_ms IS NULL, ping_ms " + dir + ", id ASC"
+	if column == "ping_ms" || column == "jitter_ms" || column == "score" {
+		return " ORDER BY " + column + " IS NULL, " + column + " " + dir + ", id ASC"
 	}
 	return " ORDER BY " + column + " " + dir + ", id ASC"
 }
@@ -104,19 +108,29 @@ func scanMTProtoRows(rows *sql.Rows) ([]models.MTProtoProxy, error) {
 	for rows.Next() {
 		var (
 			p         models.MTProtoProxy
-			method    sql.NullString
 			ping      sql.NullInt64
+			jitter    sql.NullInt64
+			score     sql.NullFloat64
+			method    sql.NullString
 			lastStr   sql.NullString
 			isWorking int
 			sourceID  sql.NullInt64
 		)
-		if err := rows.Scan(&p.ID, &p.Host, &p.Port, &p.Secret, &p.Type, &ping, &method,
-			&isWorking, &lastStr, &sourceID); err != nil {
+		if err := rows.Scan(&p.ID, &p.Host, &p.Port, &p.Secret, &p.Type, &ping, &jitter,
+			&p.Successes, &p.Attempts, &score, &method, &isWorking, &lastStr, &sourceID); err != nil {
 			return nil, err
 		}
 		if ping.Valid {
 			v := int(ping.Int64)
 			p.PingMs = &v
+		}
+		if jitter.Valid {
+			v := int(jitter.Int64)
+			p.JitterMs = &v
+		}
+		if score.Valid {
+			v := score.Float64
+			p.Score = &v
 		}
 		if method.Valid {
 			p.Method = method.String
@@ -274,18 +288,20 @@ func (s *StorageService) DeleteMTProtoByFilter(f models.MTProtoFilter) (int, err
 	return int(n), nil
 }
 
-// UpdateMTProtoResult сохраняет результат проверки Telegram-прокси.
+// UpdateMTProtoResult сохраняет результат проверки Telegram-прокси (ping, джиттер, надёжность, оценка).
 func (s *StorageService) UpdateMTProtoResult(r MTProtoResult) error {
 	_, err := s.db.Exec(`UPDATE mtproto_proxies
-		SET ping_ms = ?, method = ?, is_working = ?, last_checked = CURRENT_TIMESTAMP
-		WHERE id = ?`, r.PingMs, r.Method, r.IsWorking, r.ProxyID)
+		SET ping_ms = ?, jitter_ms = ?, successes = ?, attempts = ?, score = ?,
+		    method = ?, is_working = ?, last_checked = CURRENT_TIMESTAMP
+		WHERE id = ?`,
+		r.PingMs, r.JitterMs, r.Successes, r.Attempts, r.Score, r.Method, r.IsWorking, r.ProxyID)
 	return err
 }
 
 // ClearMTProtoStatus сбрасывает результат проверки у Telegram-прокси под фильтр.
 func (s *StorageService) ClearMTProtoStatus(f models.MTProtoFilter) (int, error) {
 	where, args := buildMTProtoWhere(f)
-	res, err := s.db.Exec("UPDATE mtproto_proxies SET ping_ms = NULL, method = NULL, last_checked = NULL, is_working = 0"+where, args...)
+	res, err := s.db.Exec("UPDATE mtproto_proxies SET ping_ms = NULL, jitter_ms = NULL, successes = 0, attempts = 0, score = NULL, method = NULL, last_checked = NULL, is_working = 0"+where, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -299,7 +315,7 @@ func (s *StorageService) ClearMTProtoStatusByIDs(ids []int64) (int, error) {
 	for start := 0; start < len(ids); start += idChunkSize {
 		end := min(start+idChunkSize, len(ids))
 		batch := ids[start:end]
-		query := "UPDATE mtproto_proxies SET ping_ms = NULL, method = NULL, last_checked = NULL, is_working = 0 WHERE id IN (" + placeholders(len(batch)) + ")"
+		query := "UPDATE mtproto_proxies SET ping_ms = NULL, jitter_ms = NULL, successes = 0, attempts = 0, score = NULL, method = NULL, last_checked = NULL, is_working = 0 WHERE id IN (" + placeholders(len(batch)) + ")"
 		res, err := s.db.Exec(query, toArgs(batch)...)
 		if err != nil {
 			return total, err

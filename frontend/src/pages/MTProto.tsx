@@ -33,8 +33,8 @@ export function MTProtoPage() {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
-  const [sortBy, setSortBy] = useState("ping");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortBy, setSortBy] = useState("score");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<Status>("all");
@@ -486,8 +486,17 @@ export function MTProtoPage() {
               </th>
               <th className="px-4 py-2 font-medium">Тип</th>
               <th className="px-4 py-2 font-medium">Секрет</th>
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("score")}>
+                Оценка{sortIndicator("score")}
+              </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("ping")}>
                 Пинг{sortIndicator("ping")}
+              </th>
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("jitter")}>
+                Джиттер{sortIndicator("jitter")}
+              </th>
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("success")}>
+                Успех{sortIndicator("success")}
               </th>
               <th className="px-4 py-2 font-medium">Метод</th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("lastChecked")}>
@@ -499,13 +508,13 @@ export function MTProtoPage() {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">
                   Загрузка…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">
                   Telegram-прокси не найдены. Добавьте источник на странице «Источники».
                 </td>
               </tr>
@@ -535,8 +544,13 @@ export function MTProtoPage() {
                   <td className="max-w-40 truncate px-4 py-2 font-mono text-xs text-muted-foreground" title={p.secret}>
                     {p.secret ? (p.secret.length > 16 ? `${p.secret.slice(0, 16)}…` : p.secret) : "—"}
                   </td>
+                  <td className="px-4 py-2 font-mono">{p.score != null ? Math.round(p.score) : "—"}</td>
                   <td className="px-4 py-2">
                     <Badge variant={latencyVariant(p.pingMs)}>{formatLatency(p.pingMs)}</Badge>
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground">{p.jitterMs != null ? `${p.jitterMs} мс` : "—"}</td>
+                  <td className="px-4 py-2 text-muted-foreground">
+                    {p.attempts > 0 ? `${p.successes}/${p.attempts}` : "—"}
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">{p.method || "—"}</td>
                   <td className="px-4 py-2 text-muted-foreground">{formatRelative(p.lastChecked)}</td>

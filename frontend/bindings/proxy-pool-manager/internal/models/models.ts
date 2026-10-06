@@ -38,6 +38,10 @@ export interface MTProtoProxy {
      */
     "type": string;
     "pingMs"?: number | null;
+    "jitterMs"?: number | null;
+    "successes": number;
+    "attempts": number;
+    "score"?: number | null;
     "method"?: string;
     "isWorking": boolean;
     "lastChecked"?: string | null;

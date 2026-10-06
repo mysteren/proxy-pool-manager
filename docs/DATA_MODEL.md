@@ -160,6 +160,23 @@ host,port,protocol,latency_ms,download_mbps,country
 ]
 ```
 
+### Таблица `mtproto_proxies`
+
+Telegram-прокси (MTProto / tg-socks). Заполняется автоматически при загрузке
+источника (строки `tg://…`, `t.me/…`, `https://t.me/…`, `host:port:secret`).
+
+Ключевые поля: `host, port, secret, tg_type` (`mtproto`|`socks`), `is_working`,
+`last_checked`, `source_id` (как у `proxies`). Уникальность — `(host, port, secret)`.
+
+Метрики качества (после проверки):
+
+- `ping_ms` — средний RTT успешных рукопожатий;
+- `jitter_ms` — разброс пинга (стабильность);
+- `successes` / `attempts` — надёжность (по 3 попыткам);
+- `score = successes/attempts*1000 − ping_ms − jitter_ms` (больше — лучше).
+
+В UI сортировка по `score` (по умолчанию), а также по пингу/джиттеру/надёжности.
+
 ## Миграции
 
 Миграции хранятся в `internal/db/migrations/` в виде пронумерованных

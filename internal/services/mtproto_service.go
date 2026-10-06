@@ -23,11 +23,18 @@ import (
 
 // MTProtoResult — результат проверки одного Telegram-прокси.
 type MTProtoResult struct {
-	ProxyID   int64  `json:"proxyId"`
-	PingMs    *int   `json:"pingMs,omitempty"`
-	IsWorking bool   `json:"isWorking"`
-	Method    string `json:"method,omitempty"`
+	ProxyID   int64    `json:"proxyId"`
+	PingMs    *int     `json:"pingMs,omitempty"`
+	JitterMs  *int     `json:"jitterMs,omitempty"`
+	Successes int      `json:"successes"`
+	Attempts  int      `json:"attempts"`
+	Score     *float64 `json:"score,omitempty"`
+	IsWorking bool     `json:"isWorking"`
+	Method    string   `json:"method,omitempty"`
 }
+
+// mtprotoAttempts — сколько раз проверяем каждый прокси (для оценки надёжности и джиттера).
+const mtprotoAttempts = 3
 
 // MTProtoService — список, проверка, копирование и экспорт Telegram-прокси.
 type MTProtoService struct {
@@ -320,12 +327,7 @@ func (s *MTProtoService) runBatch(ctx context.Context, total int, feed func(ctx 
 			defer wg.Done()
 			defer sem.Release(1)
 
-			res := mtproto.Check(ctx, p.Host, p.Port, p.Secret, p.Type, timeout)
-			result := MTProtoResult{ProxyID: p.ID, IsWorking: res.Working, Method: res.Method}
-			if res.Working {
-				ping := res.PingMs
-				result.PingMs = &ping
-			}
+			result := s.probe(ctx, p, timeout)
 			_ = s.storage.UpdateMTProtoResult(result)
 
 			statMu.Lock()
@@ -349,4 +351,51 @@ func (s *MTProtoService) runBatch(ctx context.Context, total int, feed func(ctx 
 
 	emitTestProgress(TestProgress{Total: total, Completed: completed})
 	emitTestCompleted(TestCompleted{Cancelled: ctx.Err() != nil, Tested: completed, Working: working})
+}
+
+// probe делает несколько попыток и оценивает качество канала:
+// ping — средний RTT успешных рукопожатий, jitter — разброс (стабильность),
+// successes/attempts — надёжность. score объединяет три метрики (больше — лучше).
+func (s *MTProtoService) probe(ctx context.Context, p models.MTProtoProxy, timeout time.Duration) MTProtoResult {
+	out := MTProtoResult{ProxyID: p.ID}
+	pings := make([]int, 0, mtprotoAttempts)
+	executed := 0
+	for i := 0; i < mtprotoAttempts; i++ {
+		if ctx.Err() != nil {
+			break
+		}
+		executed++
+		r := mtproto.Check(ctx, p.Host, p.Port, p.Secret, p.Type, timeout)
+		if r.Working {
+			out.Successes++
+			pings = append(pings, r.PingMs)
+			if out.Method == "" {
+				out.Method = r.Method
+			}
+		}
+	}
+	out.Attempts = executed
+	if len(pings) == 0 {
+		return out
+	}
+
+	minPing, maxPing, sum := pings[0], pings[0], 0
+	for _, v := range pings {
+		if v < minPing {
+			minPing = v
+		}
+		if v > maxPing {
+			maxPing = v
+		}
+		sum += v
+	}
+	avg := sum / len(pings)
+	jitter := maxPing - minPing
+	out.PingMs = &avg
+	out.JitterMs = &jitter
+	out.IsWorking = true
+
+	score := float64(out.Successes)/float64(executed)*1000 - float64(avg) - float64(jitter)
+	out.Score = &score
+	return out
 }
