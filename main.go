@@ -15,6 +15,11 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// appIcon — иконка приложения (окно и системные метаданные).
+//
+//go:embed build/appicon.png
+var appIcon []byte
+
 func init() {
 	// Типизированные события: генератор биндингов даст фронтенду типизированный TS-API.
 	application.RegisterEvent[string]("theme:changed")
@@ -41,6 +46,7 @@ func main() {
 	app := application.New(application.Options{
 		Name:        "Proxy Pool Manager",
 		Description: "Сбор, проверка и управление пулом прокси",
+		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(themeService),
 			application.NewService(sourceService),
@@ -65,6 +71,9 @@ func main() {
 		MinHeight:        600,
 		BackgroundColour: application.NewRGB(18, 18, 20),
 		URL:              "/",
+		Linux: application.LinuxWindow{
+			Icon: appIcon,
+		},
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			Backdrop:                application.MacBackdropTranslucent,
