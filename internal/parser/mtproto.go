@@ -35,6 +35,12 @@ func ParseMTProtoText(content string) []models.ParsedMTProto {
 
 func parseMTProtoLine(line string) (models.ParsedMTProto, bool) {
 	lower := strings.ToLower(line)
+	// Допускаем ссылки с префиксом схемы: https://t.me/proxy?... , http://t.me/...
+	if strings.HasPrefix(lower, "https://") {
+		line, lower = line[len("https://"):], lower[len("https://"):]
+	} else if strings.HasPrefix(lower, "http://") {
+		line, lower = line[len("http://"):], lower[len("http://"):]
+	}
 	if strings.HasPrefix(lower, "tg://") || strings.HasPrefix(lower, "t.me/") {
 		return parseTGLink(line)
 	}

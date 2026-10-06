@@ -28,6 +28,26 @@ t.me/proxy?server=9.9.9.9&port=443&secret=ddaabbccddeeff00112233445566778899`
 	}
 }
 
+func TestParseMTProtoSchemePrefix(t *testing.T) {
+	content := `https://t.me/proxy?server=good.cipservice.co.uk&port=2083&secret=eeNEgYdJvXrFGRMCIMJdCQ
+http://t.me/socks?server=5.6.7.8&port=1080
+https://t.me/proxy?server=1.2.3.4&port=443&secret=dd10400103324995b07c030386e886e7f1`
+
+	got := ParseMTProtoText(content)
+	if len(got) != 3 {
+		t.Fatalf("ожидалось 3, получено %d: %+v", len(got), got)
+	}
+	if got[0].Host != "good.cipservice.co.uk" || got[0].Port != 2083 || got[0].Type != "mtproto" || got[0].Secret == "" {
+		t.Errorf("https://t.me/proxy разобран неверно: %+v", got[0])
+	}
+	if got[1].Type != "socks" || got[1].Host != "5.6.7.8" || got[1].Port != 1080 {
+		t.Errorf("http://t.me/socks разобран неверно: %+v", got[1])
+	}
+	if got[2].Secret != "dd10400103324995b07c030386e886e7f1" {
+		t.Errorf("secret неверен: %+v", got[2])
+	}
+}
+
 func TestParseTextSkipsMTProto(t *testing.T) {
 	// Обычный парсер не должен брать Telegram-строки.
 	got, err := ParseText("example.com:8080\nhost.example:443:aabbccddeeff00112233445566778899\ntg://proxy?server=1.2.3.4&port=443&secret=aabb")
