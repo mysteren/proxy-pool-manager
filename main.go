@@ -47,6 +47,12 @@ func main() {
 		Name:        "Proxy Pool Manager",
 		Description: "Сбор, проверка и управление пулом прокси",
 		Icon:        appIcon,
+		Linux: application.LinuxOptions{
+			// app_id окна (Wayland) = prgname. Должен совпадать с id .desktop
+			// (имя файла proxy-pool-manager.desktop), иначе GNOME/KDE
+			// показывает иконку-заглушку.
+			ProgramName: "proxy-pool-manager",
+		},
 		Services: []application.Service{
 			application.NewService(themeService),
 			application.NewService(sourceService),
@@ -72,6 +78,7 @@ func main() {
 		BackgroundColour: application.NewRGB(18, 18, 20),
 		URL:              "/",
 		Linux: application.LinuxWindow{
+			// На GTK4 эта иконка игнорируется — иконка берётся из .desktop.
 			Icon: appIcon,
 		},
 		Mac: application.MacWindow{
