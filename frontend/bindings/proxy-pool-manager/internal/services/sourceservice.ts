@@ -19,14 +19,14 @@ import * as models$0 from "../models/models.js";
 import * as $models from "./models.js";
 
 /**
- * AddFromFile создаёт источник из локального файла.
+ * AddFromFile загружает прокси из локального файла. Повторный путь обновляет источник.
  */
 export function AddFromFile(name: string, path: string): $CancellablePromise<$models.FetchResult> {
     return $Call.ByID(1932912370, name, path);
 }
 
 /**
- * AddFromURL создаёт источник и загружает прокси по URL.
+ * AddFromURL загружает прокси по URL. Повторный URL обновляет существующий источник.
  */
 export function AddFromURL(name: string, rawURL: string): $CancellablePromise<$models.FetchResult> {
     return $Call.ByID(261125981, name, rawURL);
@@ -55,7 +55,6 @@ export function ListSources(): $CancellablePromise<models$0.Source[] | null> {
 
 /**
  * PickProxyFile открывает системный диалог выбора файла и возвращает путь.
- * Пустая строка означает, что пользователь отменил выбор.
  */
 export function PickProxyFile(): $CancellablePromise<string> {
     return $Call.ByID(2733237558);

@@ -36,6 +36,7 @@ func main() {
 	sourceService := services.NewSourceService(storage)
 	proxyService := services.NewProxyService(storage, settings)
 	testerService := services.NewTesterService(storage, settings)
+	mtprotoService := services.NewMTProtoService(storage, settings)
 
 	app := application.New(application.Options{
 		Name:        "Proxy Pool Manager",
@@ -46,6 +47,7 @@ func main() {
 			application.NewService(proxyService),
 			application.NewService(testerService),
 			application.NewService(settings),
+			application.NewService(mtprotoService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

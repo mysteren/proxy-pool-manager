@@ -46,12 +46,17 @@ export function SourcesPage() {
   }, [load]);
 
   const reportResult = (result: FetchResult) => {
-    if (result.fetched > 0 && result.added === 0) {
+    if (result.fetched === 0 && result.mtprotoAdded > 0) {
+      toast.success(`Добавлено Telegram-прокси: ${result.mtprotoAdded}`);
+      return;
+    }
+    const mt = result.mtprotoAdded > 0 ? `, Telegram-прокси: ${result.mtprotoAdded}` : "";
+    if (result.fetched > 0 && result.added === 0 && result.mtprotoAdded === 0) {
       toast.info(`Все ${result.fetched} прокси уже в пуле`);
       return;
     }
     toast.success(
-      `Добавлено ${result.added} из ${result.fetched} (уже в пуле: ${result.skipped})`,
+      `Добавлено ${result.added} из ${result.fetched} (уже в пуле: ${result.skipped})${mt}`,
     );
   };
 

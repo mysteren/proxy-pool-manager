@@ -21,6 +21,10 @@ func ParseText(content string) ([]models.ParsedProxy, error) {
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
 			continue
 		}
+		// Telegram-прокси (tg://, host:port:secret) идут в отдельный раздел.
+		if _, isMTProto := parseMTProtoLine(line); isMTProto {
+			continue
+		}
 		p, ok := parseLine(line)
 		if !ok {
 			continue

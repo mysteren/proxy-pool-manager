@@ -20,12 +20,14 @@ import (
 const maxSourceBytes = 20 << 20 // 20 МБ
 
 // FetchResult — итог загрузки/разбора источника.
+// Прокси автоматически раскладываются: обычные и Telegram (MTProto).
 type FetchResult struct {
-	SourceID int64    `json:"sourceId"`
-	Fetched  int      `json:"fetched"`
-	Added    int      `json:"added"`
-	Skipped  int      `json:"skipped"`
-	Errors   []string `json:"errors,omitempty"`
+	SourceID     int64    `json:"sourceId"`
+	Fetched      int      `json:"fetched"`
+	Added        int      `json:"added"`
+	Skipped      int      `json:"skipped"`
+	MTProtoAdded int      `json:"mtprotoAdded"`
+	Errors       []string `json:"errors,omitempty"`
 }
 
 // SourceService загружает списки прокси из URL, файлов и ручного ввода.
@@ -41,7 +43,7 @@ func NewSourceService(storage *StorageService) *SourceService {
 	}
 }
 
-// AddFromURL создаёт источник и загружает прокси по URL.
+// AddFromURL загружает прокси по URL. Повторный URL обновляет существующий источник.
 func (s *SourceService) AddFromURL(name, rawURL string) (FetchResult, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
@@ -51,7 +53,11 @@ func (s *SourceService) AddFromURL(name, rawURL string) (FetchResult, error) {
 
 	// Сначала загружаем и разбираем, и только потом создаём источник:
 	// так при ошибке не остаётся пустой источник.
-	proxies, err := s.loadURL(rawURL)
+	content, contentType, err := s.fetchURL(rawURL)
+	if err != nil {
+		return FetchResult{}, err
+	}
+	proxies, mtproxies, err := parseAll(content, contentType)
 	if err != nil {
 		return FetchResult{}, err
 	}
@@ -59,10 +65,10 @@ func (s *SourceService) AddFromURL(name, rawURL string) (FetchResult, error) {
 	if err != nil {
 		return FetchResult{}, err
 	}
-	return s.ingest(id, proxies)
+	return s.ingest(id, proxies, mtproxies)
 }
 
-// AddFromFile создаёт источник из локального файла.
+// AddFromFile загружает прокси из локального файла. Повторный путь обновляет источник.
 func (s *SourceService) AddFromFile(name, path string) (FetchResult, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -72,11 +78,7 @@ func (s *SourceService) AddFromFile(name, path string) (FetchResult, error) {
 	if err != nil {
 		return FetchResult{}, err
 	}
-	proxies, err := parseContent(content, "")
-	if err != nil {
-		return FetchResult{}, err
-	}
-	proxies, err = requireProxies(proxies)
+	proxies, mtproxies, err := parseAll(content, "")
 	if err != nil {
 		return FetchResult{}, err
 	}
@@ -84,16 +86,12 @@ func (s *SourceService) AddFromFile(name, path string) (FetchResult, error) {
 	if err != nil {
 		return FetchResult{}, err
 	}
-	return s.ingest(id, proxies)
+	return s.ingest(id, proxies, mtproxies)
 }
 
 // AddManual добавляет прокси из ручного ввода прямо в пул (без источника).
 func (s *SourceService) AddManual(text string) (FetchResult, error) {
-	proxies, err := parser.ParseText(text)
-	if err != nil {
-		return FetchResult{}, err
-	}
-	proxies, err = requireProxies(proxies)
+	proxies, mtproxies, err := parseAll([]byte(text), "")
 	if err != nil {
 		return FetchResult{}, err
 	}
@@ -101,10 +99,15 @@ func (s *SourceService) AddManual(text string) (FetchResult, error) {
 	if err != nil {
 		return FetchResult{}, err
 	}
+	mtAdded, err := s.storage.InsertMTProto(mtproxies, nil)
+	if err != nil {
+		return FetchResult{}, err
+	}
 	return FetchResult{
-		Fetched: len(proxies),
-		Added:   added,
-		Skipped: len(proxies) - added,
+		Fetched:      len(proxies),
+		Added:        added,
+		Skipped:      len(proxies) - added,
+		MTProtoAdded: mtAdded,
 	}, nil
 }
 
@@ -119,25 +122,25 @@ func (s *SourceService) RefreshSource(id int64) (FetchResult, error) {
 	}
 	switch {
 	case src.URL != nil:
-		proxies, err := s.loadURL(*src.URL)
+		content, contentType, err := s.fetchURL(*src.URL)
 		if err != nil {
 			return FetchResult{}, err
 		}
-		return s.ingest(id, proxies)
+		proxies, mtproxies, err := parseAll(content, contentType)
+		if err != nil {
+			return FetchResult{}, err
+		}
+		return s.ingest(id, proxies, mtproxies)
 	case src.FilePath != nil:
 		content, err := os.ReadFile(*src.FilePath)
 		if err != nil {
 			return FetchResult{}, err
 		}
-		proxies, err := parseContent(content, "")
+		proxies, mtproxies, err := parseAll(content, "")
 		if err != nil {
 			return FetchResult{}, err
 		}
-		proxies, err = requireProxies(proxies)
-		if err != nil {
-			return FetchResult{}, err
-		}
-		return s.ingest(id, proxies)
+		return s.ingest(id, proxies, mtproxies)
 	default:
 		return FetchResult{}, fmt.Errorf("у источника нет URL или файла")
 	}
@@ -154,7 +157,6 @@ func (s *SourceService) DeleteSource(id int64) error {
 }
 
 // PickProxyFile открывает системный диалог выбора файла и возвращает путь.
-// Пустая строка означает, что пользователь отменил выбор.
 func (s *SourceService) PickProxyFile() (string, error) {
 	path, err := application.Get().Dialog.OpenFile().
 		SetTitle("Выберите файл со списком прокси").
@@ -165,18 +167,6 @@ func (s *SourceService) PickProxyFile() (string, error) {
 		return "", err
 	}
 	return path, nil
-}
-
-func (s *SourceService) loadURL(rawURL string) ([]models.ParsedProxy, error) {
-	content, contentType, err := s.fetchURL(rawURL)
-	if err != nil {
-		return nil, err
-	}
-	proxies, err := parseContent(content, contentType)
-	if err != nil {
-		return nil, err
-	}
-	return requireProxies(proxies)
 }
 
 func (s *SourceService) fetchURL(rawURL string) ([]byte, string, error) {
@@ -195,9 +185,13 @@ func (s *SourceService) fetchURL(rawURL string) ([]byte, string, error) {
 	return body, resp.Header.Get("Content-Type"), nil
 }
 
-// ingest сохраняет прокси источника и обновляет метку загрузки.
-func (s *SourceService) ingest(sourceID int64, proxies []models.ParsedProxy) (FetchResult, error) {
+// ingest сохраняет обычные и Telegram-прокси источника и обновляет метку загрузки.
+func (s *SourceService) ingest(sourceID int64, proxies []models.ParsedProxy, mtproxies []models.ParsedMTProto) (FetchResult, error) {
 	added, err := s.storage.InsertProxies(proxies, &sourceID)
+	if err != nil {
+		return FetchResult{}, err
+	}
+	mtAdded, err := s.storage.InsertMTProto(mtproxies, &sourceID)
 	if err != nil {
 		return FetchResult{}, err
 	}
@@ -206,13 +200,27 @@ func (s *SourceService) ingest(sourceID int64, proxies []models.ParsedProxy) (Fe
 	}
 
 	result := FetchResult{
-		SourceID: sourceID,
-		Fetched:  len(proxies),
-		Added:    added,
-		Skipped:  len(proxies) - added,
+		SourceID:     sourceID,
+		Fetched:      len(proxies),
+		Added:        added,
+		Skipped:      len(proxies) - added,
+		MTProtoAdded: mtAdded,
 	}
 	emitSourceFetched(result)
 	return result, nil
+}
+
+// parseAll разбирает содержимое в обычные и Telegram-прокси.
+func parseAll(content []byte, contentType string) ([]models.ParsedProxy, []models.ParsedMTProto, error) {
+	proxies, err := parseContent(content, contentType)
+	if err != nil {
+		return nil, nil, err
+	}
+	mtproxies := parser.ParseMTProtoText(string(content))
+	if len(proxies) == 0 && len(mtproxies) == 0 {
+		return nil, nil, fmt.Errorf("в источнике не найдено ни прокси, ни Telegram-прокси — проверьте, что ссылка ведёт на текстовый или JSON список")
+	}
+	return proxies, mtproxies, nil
 }
 
 func parseContent(content []byte, contentType string) ([]models.ParsedProxy, error) {
@@ -233,13 +241,6 @@ func parseContent(content []byte, contentType string) ([]models.ParsedProxy, err
 		}
 	}
 	return parser.ParseText(string(content))
-}
-
-func requireProxies(proxies []models.ParsedProxy) ([]models.ParsedProxy, error) {
-	if len(proxies) == 0 {
-		return nil, fmt.Errorf("в источнике не найдено ни одного прокси — проверьте, что ссылка ведёт на текстовый или JSON список")
-	}
-	return proxies, nil
 }
 
 func isHTML(contentType string, content []byte) bool {

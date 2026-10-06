@@ -3,12 +3,14 @@
 
 /**
  * FetchResult — итог загрузки/разбора источника.
+ * Прокси автоматически раскладываются: обычные и Telegram (MTProto).
  */
 export interface FetchResult {
     "sourceId": number;
     "fetched": number;
     "added": number;
     "skipped": number;
+    "mtprotoAdded": number;
     "errors"?: string[] | null;
 }
 

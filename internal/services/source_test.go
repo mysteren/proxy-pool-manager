@@ -86,6 +86,35 @@ func TestAddFromURLRejectsBadScheme(t *testing.T) {
 	}
 }
 
+func TestAddFromURLSplitsMTProto(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("1.1.1.1:8080\ntg://proxy?server=2.2.2.2&port=443&secret=aabbccddeeff00112233445566778899\n"))
+	}))
+	defer srv.Close()
+
+	svc, storage := newTestSourceService(t)
+	result, err := svc.AddFromURL("mixed", srv.URL)
+	if err != nil {
+		t.Fatalf("AddFromURL: %v", err)
+	}
+	if result.Added != 1 || result.MTProtoAdded != 1 {
+		t.Fatalf("ожидалось Added=1, MTProtoAdded=1, получено %+v", result)
+	}
+
+	proxies, err := storage.CountProxies(models.ProxyFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mt, err := storage.CountMTProto(models.MTProtoFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proxies != 1 || mt != 1 {
+		t.Fatalf("в БД proxies=%d mtproto=%d, ожидалось 1/1", proxies, mt)
+	}
+}
+
 func TestAddFromURLIsIdempotent(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")

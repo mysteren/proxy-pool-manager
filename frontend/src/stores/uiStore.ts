@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type Page = "proxies" | "sources" | "settings";
+export type Page = "proxies" | "mtproto" | "sources" | "settings";
 
 interface UiState {
   activePage: Page;

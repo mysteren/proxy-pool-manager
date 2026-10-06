@@ -1,0 +1,8 @@
+# Working proxies | checked: 2026-10-02T16:26:45.680Z
+tg://proxy?server=150.241.65.113&port=443&secret=eeb87dc15f92c391155eccb9293e2881796f7a6f6e2e7275&ping=76
+tg://socks?server=192.3.245.166&port=30001&ping=174
+tg://socks?server=107.175.194.203&port=40000&ping=177
+tg://proxy?server=x.shmelproxy.top&port=443&secret=eefc2612ff65a557fddf1d1b334395ef237975672d6c696e6b2e7275&ping=337
+tg://proxy?server=dns.vdl.lat&port=443&secret=eece59031f1109f05387b7155534c7ac87646e732e76646c2e6c6174&ping=1140
+tg://proxy?server=130.49.150.245&port=443&secret=ee00d85706e58f9b5ead3b6c8a08d984df636c6f75642e6d61696c2e7275&ping=2954
+tg://proxy?server=telega.its-work.ru&port=443&secret=ee368601a36ebfafec1604dd8ad6c2d1eb636c6f7564666c6172652e636f6d&ping=3098

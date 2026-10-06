@@ -4,6 +4,7 @@ import { Events } from "@wailsio/runtime";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Toaster } from "@/components/ui/toaster";
 import { ProxiesPage } from "@/pages/Proxies";
+import { MTProtoPage } from "@/pages/MTProto";
 import { SourcesPage } from "@/pages/Sources";
 import { SettingsPage } from "@/pages/Settings";
 import { useThemeStore } from "@/stores/themeStore";
@@ -60,6 +61,7 @@ export default function App() {
     <>
       <AppLayout>
         {activePage === "proxies" && <ProxiesPage />}
+        {activePage === "mtproto" && <MTProtoPage />}
         {activePage === "sources" && <SourcesPage />}
         {activePage === "settings" && <SettingsPage />}
       </AppLayout>

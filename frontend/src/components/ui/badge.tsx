@@ -15,6 +15,7 @@ const badgeVariants = cva(
         danger: "border-transparent bg-red-500/15 text-red-600 dark:text-red-400",
         http: "border-transparent bg-sky-500/15 text-sky-600 dark:text-sky-400",
         socks5: "border-transparent bg-violet-500/15 text-violet-600 dark:text-violet-400",
+        telegram: "border-transparent bg-blue-500/15 text-blue-600 dark:text-blue-400",
       },
     },
     defaultVariants: { variant: "default" },

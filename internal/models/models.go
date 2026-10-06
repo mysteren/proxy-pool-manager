@@ -54,3 +54,37 @@ type ProxyFilter struct {
 	Limit       int     `json:"limit"`
 	Offset      int     `json:"offset"`
 }
+
+// MTProtoProxy — Telegram-прокси (MTProto / tg-socks).
+type MTProtoProxy struct {
+	ID          int64      `json:"id"`
+	Host        string     `json:"host"`
+	Port        int        `json:"port"`
+	Secret      string     `json:"secret,omitempty"`
+	Type        string     `json:"type"` // mtproto | socks
+	PingMs      *int       `json:"pingMs,omitempty"`
+	Method      string     `json:"method,omitempty"`
+	IsWorking   bool       `json:"isWorking"`
+	LastChecked *time.Time `json:"lastChecked,omitempty"`
+	SourceID    *int64     `json:"sourceId,omitempty"`
+}
+
+// ParsedMTProto — Telegram-прокси до вставки в БД.
+type ParsedMTProto struct {
+	Host   string
+	Port   int
+	Secret string
+	Type   string // mtproto | socks
+}
+
+// MTProtoFilter — фильтр, сортировка и пагинация для Telegram-прокси.
+type MTProtoFilter struct {
+	OnlyWorking *bool   `json:"onlyWorking,omitempty"`
+	Unchecked   *bool   `json:"unchecked,omitempty"`
+	Type        *string `json:"type,omitempty"` // mtproto | socks
+	Search      *string `json:"search,omitempty"`
+	SortBy      string  `json:"sortBy"` // ping|host|lastChecked
+	SortDir     string  `json:"sortDir"`
+	Limit       int     `json:"limit"`
+	Offset      int     `json:"offset"`
+}

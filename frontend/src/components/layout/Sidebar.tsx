@@ -1,4 +1,4 @@
-import { ListTree, Rss, Settings as SettingsIcon, Moon, Sun } from "lucide-react";
+import { ListTree, Send, Rss, Settings as SettingsIcon, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiStore, type Page } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
@@ -11,6 +11,7 @@ interface NavItem {
 
 const items: NavItem[] = [
   { page: "proxies", label: "Прокси", icon: ListTree },
+  { page: "mtproto", label: "MTProto", icon: Send },
   { page: "sources", label: "Источники", icon: Rss },
   { page: "settings", label: "Настройки", icon: SettingsIcon },
 ];
