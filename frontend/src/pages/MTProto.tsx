@@ -41,6 +41,7 @@ export function MTProtoPage() {
   const [noSource, setNoSource] = useState(false);
   const [typeFilter, setTypeFilter] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
   const [checking, setChecking] = useState<Set<number>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
   const [exportFormat, setExportFormat] = useState("txt");
@@ -114,7 +115,21 @@ export function MTProtoPage() {
   const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-  const toggleRow = (id: number) =>
+  const handleRowClick = (index: number, event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => {
+    const id = rows[index]?.id;
+    if (id == null) {
+      return;
+    }
+    if (event.shiftKey && anchorIndex != null) {
+      const [from, to] = anchorIndex <= index ? [anchorIndex, index] : [index, anchorIndex];
+      const rangeIds = rows.slice(from, to + 1).map((r) => r.id);
+      setSelected((prev) => {
+        const next = event.ctrlKey || event.metaKey ? new Set(prev) : new Set<number>();
+        rangeIds.forEach((rid) => next.add(rid));
+        return next;
+      });
+      return;
+    }
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -124,6 +139,8 @@ export function MTProtoPage() {
       }
       return next;
     });
+    setAnchorIndex(index);
+  };
 
   const toggleAllOnPage = () =>
     setSelected((prev) => {
@@ -519,23 +536,17 @@ export function MTProtoPage() {
                 </td>
               </tr>
             ) : (
-              rows.map((p) => (
+              rows.map((p, idx) => (
                 <tr
                   key={p.id}
+                  onClick={(e) => handleRowClick(idx, e)}
                   className={cn(
-                    "border-b border-border/60 hover:bg-accent/40",
+                    "cursor-pointer border-b border-border/60 select-none hover:bg-accent/40",
+                    selected.has(p.id) && "bg-primary/10",
                     checking.has(p.id) && "bg-accent/50",
                   )}
                 >
-                  <td className="px-4 py-2">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-primary"
-                      checked={selected.has(p.id)}
-                      onChange={() => toggleRow(p.id)}
-                      aria-label={`Выбрать ${p.host}:${p.port}`}
-                    />
-                  </td>
+                  <td className="px-4 py-2" />
                   <td className="px-4 py-2 font-mono">{p.host}</td>
                   <td className="px-4 py-2 font-mono">{p.port}</td>
                   <td className="px-4 py-2">
@@ -558,7 +569,10 @@ export function MTProtoPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleTestOne(p.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTestOne(p.id);
+                      }}
                       disabled={running || checking.has(p.id)}
                     >
                       {checking.has(p.id) ? (
