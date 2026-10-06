@@ -57,6 +57,13 @@ export function Delete(ids: number[] | null): $CancellablePromise<void> {
 }
 
 /**
+ * DeleteByFilter удаляет Telegram-прокси под фильтр.
+ */
+export function DeleteByFilter(f: models$0.MTProtoFilter): $CancellablePromise<number> {
+    return $Call.ByID(3465758607, f);
+}
+
+/**
  * ExportByFilter экспортирует Telegram-прокси по фильтру (потоково).
  */
 export function ExportByFilter(f: models$0.MTProtoFilter, format: string, path: string): $CancellablePromise<number> {

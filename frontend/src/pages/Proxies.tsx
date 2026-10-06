@@ -14,7 +14,10 @@ import { ProxyService, TesterService, type MyLocation } from "../../bindings/pro
 import { Proxy, ProxyFilter } from "../../bindings/proxy-pool-manager/internal/models";
 
 type Status = "all" | "working" | "broken" | "unchecked";
-type ConfirmAction = { kind: "delete" | "clear"; label: string };
+type ConfirmAction = {
+  kind: "delete" | "clear" | "deleteBroken" | "deleteUnchecked" | "deleteAll";
+  label: string;
+};
 
 const pageSizeOptions = [25, 50, 100, 200];
 const latencyOptions = [
@@ -42,6 +45,7 @@ export function ProxiesPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<Status>("all");
+  const [noSource, setNoSource] = useState(false);
   const [protocol, setProtocol] = useState("");
   const [maxLatency, setMaxLatency] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -70,13 +74,14 @@ export function ProxiesPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearch, status, protocol, maxLatency, pageSize]);
+  }, [debouncedSearch, status, noSource, protocol, maxLatency, pageSize]);
 
   const buildFilter = useCallback(
     (offset: number): ProxyFilter => {
       const filter: ProxyFilter = {
         onlyWorking: null,
         unchecked: null,
+        noSource: noSource ? true : null,
         protocol: protocol || null,
         maxLatency: maxLatency ? Number(maxLatency) : null,
         search: debouncedSearch || null,
@@ -95,7 +100,7 @@ export function ProxiesPage() {
       }
       return filter;
     },
-    [status, protocol, maxLatency, debouncedSearch, sortBy, sortDir, pageSize],
+    [status, noSource, protocol, maxLatency, debouncedSearch, sortBy, sortDir, pageSize],
   );
 
   const load = useCallback(async () => {
@@ -215,6 +220,55 @@ export function ProxiesPage() {
     }
   };
 
+  const deleteFilter = (patch: Partial<ProxyFilter>): ProxyFilter => ({
+    onlyWorking: null,
+    unchecked: null,
+    noSource: null,
+    protocol: null,
+    maxLatency: null,
+    search: null,
+    sortBy: "id",
+    sortDir: "asc",
+    limit: 0,
+    offset: 0,
+    ...patch,
+  });
+
+  const deleteByFilter = async (filter: ProxyFilter, message: string) => {
+    try {
+      const count = await ProxyService.DeleteByFilter(filter);
+      setConfirm(null);
+      setSelected(new Set());
+      toast.success(`${message}: ${count}`);
+      await load();
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
+  const doConfirm = async () => {
+    if (!confirm) {
+      return;
+    }
+    switch (confirm.kind) {
+      case "delete":
+        await doDelete();
+        break;
+      case "clear":
+        await doClear();
+        break;
+      case "deleteBroken":
+        await deleteByFilter(deleteFilter({ onlyWorking: false, unchecked: false }), "Удалено нерабочих");
+        break;
+      case "deleteUnchecked":
+        await deleteByFilter(deleteFilter({ unchecked: true }), "Удалено непроверенных");
+        break;
+      case "deleteAll":
+        await deleteByFilter(deleteFilter({}), "Удалено всего");
+        break;
+    }
+  };
+
   const handleCopy = async () => {
     try {
       const count = await ProxyService.CopyToClipboard([...selected]);
@@ -268,6 +322,15 @@ export function ProxiesPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-48"
         />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="size-4 accent-primary"
+            checked={noSource}
+            onChange={(e) => setNoSource(e.target.checked)}
+          />
+          Без источника
+        </label>
         <div className="flex rounded-md border border-border p-0.5">
           {statusOptions.map((option) => (
             <button
@@ -311,7 +374,7 @@ export function ProxiesPage() {
         {confirm ? (
           <>
             <span className="text-sm">{confirm.label}</span>
-            <Button size="sm" variant={confirm.kind === "delete" ? "destructive" : "default"} onClick={confirm.kind === "delete" ? doDelete : doClear}>
+            <Button size="sm" variant={confirm.kind === "clear" ? "default" : "destructive"} onClick={doConfirm}>
               Да
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>
@@ -361,6 +424,33 @@ export function ProxiesPage() {
             >
               <Eraser className="size-3.5" />
               Очистить статус
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirm({ kind: "deleteUnchecked", label: "Удалить все непроверенные прокси?" })}
+              disabled={running}
+            >
+              <Trash2 className="size-3.5" />
+              Непроверенные
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirm({ kind: "deleteBroken", label: "Удалить все нерабочие прокси?" })}
+              disabled={running}
+            >
+              <Trash2 className="size-3.5" />
+              Нерабочие
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirm({ kind: "deleteAll", label: "Удалить ВСЕ прокси из пула? Источники останутся." })}
+              disabled={running}
+            >
+              <Trash2 className="size-3.5" />
+              Всё
             </Button>
             <div className="ml-auto flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={handleCopy} disabled={selected.size === 0}>

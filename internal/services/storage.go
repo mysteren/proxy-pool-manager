@@ -105,6 +105,9 @@ func buildProxyWhere(f models.ProxyFilter) (string, []any) {
 			query += " AND last_checked IS NOT NULL"
 		}
 	}
+	if f.NoSource != nil && *f.NoSource {
+		query += " AND source_id IS NULL"
+	}
 	if f.Protocol != nil && *f.Protocol != "" {
 		query += " AND protocol = ?"
 		args = append(args, *f.Protocol)
@@ -418,7 +421,8 @@ func (s *StorageService) ClearStatusByIDs(ids []int64) (int, error) {
 }
 
 const sourceSelect = `SELECT s.id, s.name, s.url, s.file_path, s.last_fetched, s.created_at,
-	(SELECT COUNT(*) FROM proxies p WHERE p.source_id = s.id) AS proxy_count
+	(SELECT COUNT(*) FROM proxies p WHERE p.source_id = s.id)
+	+ (SELECT COUNT(*) FROM mtproto_proxies m WHERE m.source_id = s.id) AS proxy_count
 	FROM sources s`
 
 func scanSource(scan func(dest ...any) error) (models.Source, error) {
@@ -518,10 +522,42 @@ func (s *StorageService) UpdateSourceLastFetched(id int64) error {
 	return err
 }
 
-// DeleteSource удаляет источник; у связанных прокси source_id обнуляется (ON DELETE SET NULL).
+// DeleteSource удаляет источник: нерабочие прокси источника удаляются, а рабочие
+// остаются в общем пуле (source_id = NULL), чтобы не терять проверенные прокси.
 func (s *StorageService) DeleteSource(id int64) error {
-	_, err := s.db.Exec("DELETE FROM sources WHERE id = ?", id)
-	return err
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM proxies WHERE source_id = ? AND is_working = 0", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM mtproto_proxies WHERE source_id = ? AND is_working = 0", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE proxies SET source_id = NULL WHERE source_id = ?", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE mtproto_proxies SET source_id = NULL WHERE source_id = ?", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM sources WHERE id = ?", id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// DeleteProxiesByFilter удаляет прокси под фильтр (offset/limit игнорируются).
+func (s *StorageService) DeleteProxiesByFilter(f models.ProxyFilter) (int, error) {
+	where, args := buildProxyWhere(f)
+	res, err := s.db.Exec("DELETE FROM proxies"+where, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }
 
 // GetSetting возвращает значение настройки (пустая строка, если не задана).

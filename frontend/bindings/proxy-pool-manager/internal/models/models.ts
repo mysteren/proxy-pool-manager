@@ -7,6 +7,7 @@
 export interface MTProtoFilter {
     "onlyWorking"?: boolean | null;
     "unchecked"?: boolean | null;
+    "noSource"?: boolean | null;
 
     /**
      * mtproto | socks
@@ -74,6 +75,11 @@ export interface ProxyFilter {
      * true: last_checked IS NULL; false: IS NOT NULL
      */
     "unchecked"?: boolean | null;
+
+    /**
+     * true: только пул без источника
+     */
+    "noSource"?: boolean | null;
     "protocol"?: string | null;
     "maxLatency"?: number | null;
     "country"?: string | null;

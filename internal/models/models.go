@@ -45,6 +45,7 @@ type ParsedProxy struct {
 type ProxyFilter struct {
 	OnlyWorking *bool   `json:"onlyWorking,omitempty"`
 	Unchecked   *bool   `json:"unchecked,omitempty"` // true: last_checked IS NULL; false: IS NOT NULL
+	NoSource    *bool   `json:"noSource,omitempty"`  // true: только пул без источника
 	Protocol    *string `json:"protocol,omitempty"`
 	MaxLatency  *int    `json:"maxLatency,omitempty"`
 	Country     *string `json:"country,omitempty"`
@@ -81,6 +82,7 @@ type ParsedMTProto struct {
 type MTProtoFilter struct {
 	OnlyWorking *bool   `json:"onlyWorking,omitempty"`
 	Unchecked   *bool   `json:"unchecked,omitempty"`
+	NoSource    *bool   `json:"noSource,omitempty"`
 	Type        *string `json:"type,omitempty"` // mtproto | socks
 	Search      *string `json:"search,omitempty"`
 	SortBy      string  `json:"sortBy"` // ping|host|lastChecked

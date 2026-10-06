@@ -13,7 +13,10 @@ import { MTProtoService } from "../../bindings/proxy-pool-manager/internal/servi
 import { MTProtoFilter, MTProtoProxy } from "../../bindings/proxy-pool-manager/internal/models";
 
 type Status = "all" | "working" | "broken" | "unchecked";
-type ConfirmAction = { kind: "delete" | "clear"; label: string };
+type ConfirmAction = {
+  kind: "delete" | "clear" | "deleteBroken" | "deleteUnchecked" | "deleteAll";
+  label: string;
+};
 
 const pageSizeOptions = [25, 50, 100, 200];
 const statusOptions: { value: Status; label: string }[] = [
@@ -35,6 +38,7 @@ export function MTProtoPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<Status>("all");
+  const [noSource, setNoSource] = useState(false);
   const [typeFilter, setTypeFilter] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [checking, setChecking] = useState<Set<number>>(new Set());
@@ -55,13 +59,14 @@ export function MTProtoPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearch, status, typeFilter, pageSize]);
+  }, [debouncedSearch, status, noSource, typeFilter, pageSize]);
 
   const buildFilter = useCallback(
     (offset: number): MTProtoFilter => {
       const filter: MTProtoFilter = {
         onlyWorking: null,
         unchecked: null,
+        noSource: noSource ? true : null,
         type: typeFilter || null,
         search: debouncedSearch || null,
         sortBy,
@@ -79,7 +84,7 @@ export function MTProtoPage() {
       }
       return filter;
     },
-    [status, typeFilter, debouncedSearch, sortBy, sortDir, pageSize],
+    [status, noSource, typeFilter, debouncedSearch, sortBy, sortDir, pageSize],
   );
 
   const load = useCallback(async () => {
@@ -218,6 +223,54 @@ export function MTProtoPage() {
     }
   };
 
+  const deleteFilter = (patch: Partial<MTProtoFilter>): MTProtoFilter => ({
+    onlyWorking: null,
+    unchecked: null,
+    noSource: null,
+    type: null,
+    search: null,
+    sortBy: "id",
+    sortDir: "asc",
+    limit: 0,
+    offset: 0,
+    ...patch,
+  });
+
+  const deleteByFilter = async (filter: MTProtoFilter, message: string) => {
+    try {
+      const count = await MTProtoService.DeleteByFilter(filter);
+      setConfirm(null);
+      setSelected(new Set());
+      toast.success(`${message}: ${count}`);
+      await load();
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
+  const doConfirm = async () => {
+    if (!confirm) {
+      return;
+    }
+    switch (confirm.kind) {
+      case "delete":
+        await doDelete();
+        break;
+      case "clear":
+        await doClear();
+        break;
+      case "deleteBroken":
+        await deleteByFilter(deleteFilter({ onlyWorking: false, unchecked: false }), "Удалено нерабочих");
+        break;
+      case "deleteUnchecked":
+        await deleteByFilter(deleteFilter({ unchecked: true }), "Удалено непроверенных");
+        break;
+      case "deleteAll":
+        await deleteByFilter(deleteFilter({}), "Удалено всего");
+        break;
+    }
+  };
+
   const sortIndicator = (column: string) =>
     sortBy === column ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
@@ -239,6 +292,15 @@ export function MTProtoPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-48"
         />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="size-4 accent-primary"
+            checked={noSource}
+            onChange={(e) => setNoSource(e.target.checked)}
+          />
+          Без источника
+        </label>
         <div className="flex rounded-md border border-border p-0.5">
           {statusOptions.map((option) => (
             <button
@@ -271,7 +333,7 @@ export function MTProtoPage() {
         {confirm ? (
           <>
             <span className="text-sm">{confirm.label}</span>
-            <Button size="sm" variant={confirm.kind === "delete" ? "destructive" : "default"} onClick={confirm.kind === "delete" ? doDelete : doClear}>
+            <Button size="sm" variant={confirm.kind === "clear" ? "default" : "destructive"} onClick={doConfirm}>
               Да
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>
@@ -321,6 +383,33 @@ export function MTProtoPage() {
             >
               <Eraser className="size-3.5" />
               Очистить статус
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirm({ kind: "deleteUnchecked", label: "Удалить все непроверенные Telegram-прокси?" })}
+              disabled={running}
+            >
+              <Trash2 className="size-3.5" />
+              Непроверенные
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirm({ kind: "deleteBroken", label: "Удалить все нерабочие Telegram-прокси?" })}
+              disabled={running}
+            >
+              <Trash2 className="size-3.5" />
+              Нерабочие
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirm({ kind: "deleteAll", label: "Удалить ВСЕ Telegram-прокси? Источники останутся." })}
+              disabled={running}
+            >
+              <Trash2 className="size-3.5" />
+              Всё
             </Button>
 
             <div className="ml-auto flex items-center gap-2">

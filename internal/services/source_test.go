@@ -113,6 +113,14 @@ func TestAddFromURLSplitsMTProto(t *testing.T) {
 	if proxies != 1 || mt != 1 {
 		t.Fatalf("в БД proxies=%d mtproto=%d, ожидалось 1/1", proxies, mt)
 	}
+
+	sources, err := storage.ListSources()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sources) != 1 || sources[0].ProxyCount != 2 {
+		t.Fatalf("счётчик источника должен учитывать MTProto: %+v", sources)
+	}
 }
 
 func TestAddFromURLIsIdempotent(t *testing.T) {

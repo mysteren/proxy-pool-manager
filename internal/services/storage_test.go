@@ -125,23 +125,27 @@ func TestSortByDownloadNullsLast(t *testing.T) {
 	}
 }
 
-func TestDeleteSourceSetsNull(t *testing.T) {
+func TestDeleteSourceKeepsWorking(t *testing.T) {
 	s := newTestStorage(t)
 	url := "https://example.com/list.txt"
 	id, err := s.CreateSource("test", &url, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.InsertProxies([]models.ParsedProxy{{Host: "9.9.9.9", Port: 80, Protocol: "http"}}, &id); err != nil {
+	if _, err := s.InsertProxies([]models.ParsedProxy{
+		{Host: "9.9.9.9", Port: 80, Protocol: "http"}, // рабочий
+		{Host: "8.8.8.8", Port: 81, Protocol: "http"}, // нерабочий
+	}, &id); err != nil {
 		t.Fatal(err)
 	}
+	mustExec(t, s, "UPDATE proxies SET is_working = 1, last_checked = CURRENT_TIMESTAMP WHERE host = '9.9.9.9'")
 
 	sources, err := s.ListSources()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sources) != 1 || sources[0].ProxyCount != 1 {
-		t.Fatalf("источник/счётчик неверны: %+v", sources)
+	if len(sources) != 1 || sources[0].ProxyCount != 2 {
+		t.Fatalf("счётчик источника неверен: %+v", sources)
 	}
 
 	if err := s.DeleteSource(id); err != nil {
@@ -152,11 +156,11 @@ func TestDeleteSourceSetsNull(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("прокси должен остаться в пуле, получено %d", len(got))
+	if len(got) != 1 || got[0].Host != "9.9.9.9" {
+		t.Fatalf("должен остаться только рабочий прокси, получено %+v", got)
 	}
 	if got[0].SourceID != nil {
-		t.Fatalf("ожидался source_id = NULL, получено %v", *got[0].SourceID)
+		t.Fatalf("рабочий прокси должен отвязаться от источника, source_id=%v", *got[0].SourceID)
 	}
 }
 

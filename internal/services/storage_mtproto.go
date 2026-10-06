@@ -62,6 +62,9 @@ func buildMTProtoWhere(f models.MTProtoFilter) (string, []any) {
 			query += " AND last_checked IS NOT NULL"
 		}
 	}
+	if f.NoSource != nil && *f.NoSource {
+		query += " AND source_id IS NULL"
+	}
 	if f.Type != nil && *f.Type != "" {
 		query += " AND tg_type = ?"
 		args = append(args, *f.Type)
@@ -258,6 +261,17 @@ func (s *StorageService) DeleteMTProto(ids []int64) error {
 		}
 	}
 	return nil
+}
+
+// DeleteMTProtoByFilter удаляет Telegram-прокси под фильтр (offset/limit игнорируются).
+func (s *StorageService) DeleteMTProtoByFilter(f models.MTProtoFilter) (int, error) {
+	where, args := buildMTProtoWhere(f)
+	res, err := s.db.Exec("DELETE FROM mtproto_proxies"+where, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }
 
 // UpdateMTProtoResult сохраняет результат проверки Telegram-прокси.

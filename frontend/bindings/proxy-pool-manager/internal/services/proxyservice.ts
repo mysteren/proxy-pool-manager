@@ -44,6 +44,13 @@ export function CountProxies(f: models$0.ProxyFilter): $CancellablePromise<numbe
 }
 
 /**
+ * DeleteByFilter удаляет прокси под фильтр.
+ */
+export function DeleteByFilter(f: models$0.ProxyFilter): $CancellablePromise<number> {
+    return $Call.ByID(3894787358, f);
+}
+
+/**
  * DeleteProxies удаляет прокси по ID.
  */
 export function DeleteProxies(ids: number[] | null): $CancellablePromise<void> {

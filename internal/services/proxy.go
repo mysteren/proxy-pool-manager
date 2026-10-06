@@ -38,6 +38,11 @@ func (s *ProxyService) DeleteProxies(ids []int64) error {
 	return s.storage.DeleteProxies(ids)
 }
 
+// DeleteByFilter удаляет прокси под фильтр.
+func (s *ProxyService) DeleteByFilter(f models.ProxyFilter) (int, error) {
+	return s.storage.DeleteProxiesByFilter(f)
+}
+
 // ClearStatus сбрасывает результат проверки у прокси под фильтр.
 func (s *ProxyService) ClearStatus(f models.ProxyFilter) (int, error) {
 	return s.storage.ClearStatus(f)

@@ -58,6 +58,11 @@ func (s *MTProtoService) Delete(ids []int64) error {
 	return s.storage.DeleteMTProto(ids)
 }
 
+// DeleteByFilter удаляет Telegram-прокси под фильтр.
+func (s *MTProtoService) DeleteByFilter(f models.MTProtoFilter) (int, error) {
+	return s.storage.DeleteMTProtoByFilter(f)
+}
+
 // ClearStatus сбрасывает статус проверки под фильтр.
 func (s *MTProtoService) ClearStatus(f models.MTProtoFilter) (int, error) {
 	return s.storage.ClearMTProtoStatus(f)
