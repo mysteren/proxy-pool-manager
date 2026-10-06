@@ -46,18 +46,31 @@ export function SourcesPage() {
   }, [load]);
 
   const reportResult = (result: FetchResult) => {
-    if (result.fetched === 0 && result.mtprotoAdded > 0) {
-      toast.success(`Добавлено Telegram-прокси: ${result.mtprotoAdded}`);
+    const parts: string[] = [];
+    if (result.fetched > 0) {
+      parts.push(
+        result.added > 0
+          ? `Прокси: +${result.added} из ${result.fetched}`
+          : `Прокси: все ${result.fetched} уже в пуле`,
+      );
+    }
+    if (result.mtprotoFetched > 0) {
+      parts.push(
+        result.mtprotoAdded > 0
+          ? `Telegram: +${result.mtprotoAdded} из ${result.mtprotoFetched}`
+          : `Telegram: все ${result.mtprotoFetched} уже в пуле`,
+      );
+    }
+    if (parts.length === 0) {
+      toast.info("Ничего не найдено");
       return;
     }
-    const mt = result.mtprotoAdded > 0 ? `, Telegram-прокси: ${result.mtprotoAdded}` : "";
-    if (result.fetched > 0 && result.added === 0 && result.mtprotoAdded === 0) {
-      toast.info(`Все ${result.fetched} прокси уже в пуле`);
-      return;
+    const message = parts.join(" · ");
+    if (result.added + result.mtprotoAdded > 0) {
+      toast.success(message);
+    } else {
+      toast.info(message);
     }
-    toast.success(
-      `Добавлено ${result.added} из ${result.fetched} (уже в пуле: ${result.skipped})${mt}`,
-    );
   };
 
   const run = useCallback(

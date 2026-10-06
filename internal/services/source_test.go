@@ -98,8 +98,8 @@ func TestAddFromURLSplitsMTProto(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddFromURL: %v", err)
 	}
-	if result.Added != 1 || result.MTProtoAdded != 1 {
-		t.Fatalf("ожидалось Added=1, MTProtoAdded=1, получено %+v", result)
+	if result.Added != 1 || result.MTProtoAdded != 1 || result.MTProtoFetched != 1 {
+		t.Fatalf("ожидалось Added=1, MTProtoAdded=1, MTProtoFetched=1, получено %+v", result)
 	}
 
 	proxies, err := storage.CountProxies(models.ProxyFilter{})

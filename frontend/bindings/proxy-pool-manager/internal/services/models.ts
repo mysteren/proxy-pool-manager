@@ -10,6 +10,7 @@ export interface FetchResult {
     "fetched": number;
     "added": number;
     "skipped": number;
+    "mtprotoFetched": number;
     "mtprotoAdded": number;
     "errors"?: string[] | null;
 }

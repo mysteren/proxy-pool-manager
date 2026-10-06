@@ -22,12 +22,13 @@ const maxSourceBytes = 20 << 20 // 20 МБ
 // FetchResult — итог загрузки/разбора источника.
 // Прокси автоматически раскладываются: обычные и Telegram (MTProto).
 type FetchResult struct {
-	SourceID     int64    `json:"sourceId"`
-	Fetched      int      `json:"fetched"`
-	Added        int      `json:"added"`
-	Skipped      int      `json:"skipped"`
-	MTProtoAdded int      `json:"mtprotoAdded"`
-	Errors       []string `json:"errors,omitempty"`
+	SourceID       int64    `json:"sourceId"`
+	Fetched        int      `json:"fetched"`
+	Added          int      `json:"added"`
+	Skipped        int      `json:"skipped"`
+	MTProtoFetched int      `json:"mtprotoFetched"`
+	MTProtoAdded   int      `json:"mtprotoAdded"`
+	Errors         []string `json:"errors,omitempty"`
 }
 
 // SourceService загружает списки прокси из URL, файлов и ручного ввода.
@@ -104,10 +105,11 @@ func (s *SourceService) AddManual(text string) (FetchResult, error) {
 		return FetchResult{}, err
 	}
 	return FetchResult{
-		Fetched:      len(proxies),
-		Added:        added,
-		Skipped:      len(proxies) - added,
-		MTProtoAdded: mtAdded,
+		Fetched:        len(proxies),
+		Added:          added,
+		Skipped:        len(proxies) - added,
+		MTProtoFetched: len(mtproxies),
+		MTProtoAdded:   mtAdded,
 	}, nil
 }
 
@@ -200,11 +202,12 @@ func (s *SourceService) ingest(sourceID int64, proxies []models.ParsedProxy, mtp
 	}
 
 	result := FetchResult{
-		SourceID:     sourceID,
-		Fetched:      len(proxies),
-		Added:        added,
-		Skipped:      len(proxies) - added,
-		MTProtoAdded: mtAdded,
+		SourceID:       sourceID,
+		Fetched:        len(proxies),
+		Added:          added,
+		Skipped:        len(proxies) - added,
+		MTProtoFetched: len(mtproxies),
+		MTProtoAdded:   mtAdded,
 	}
 	emitSourceFetched(result)
 	return result, nil
