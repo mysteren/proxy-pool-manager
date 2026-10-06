@@ -146,15 +146,19 @@ export function ProxiesPage() {
       });
       return;
     }
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+    if (event.ctrlKey || event.metaKey) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      });
+    } else {
+      setSelected(new Set([id]));
+    }
     setAnchorIndex(index);
   };
 
