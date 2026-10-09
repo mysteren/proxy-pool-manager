@@ -29,7 +29,7 @@ export function GetMyLocation(): $CancellablePromise<$models.MyLocation> {
 }
 
 /**
- * TestAll проверяет весь пул.
+ * TestAll проверяет весь пул (только SOCKS5).
  */
 export function TestAll(): $CancellablePromise<void> {
     return $Call.ByID(2824689950);

@@ -15,7 +15,7 @@ CREATE TABLE proxies (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     host            TEXT    NOT NULL,
     port            INTEGER NOT NULL,
-    protocol        TEXT    NOT NULL DEFAULT 'http',
+    protocol        TEXT    NOT NULL DEFAULT 'socks5',
     country         TEXT,
     latency_ms      INTEGER,
     download_mbps   REAL,
@@ -132,17 +132,16 @@ type ProxyFilter struct {
 ### TXT
 
 ```
-http://192.168.1.1:8080
 socks5://10.0.0.1:1080
-https://203.0.113.5:3128
+socks5://10.0.0.2:1080
 ```
 
 ### CSV
 
 ```
 host,port,protocol,latency_ms,download_mbps,country
-192.168.1.1,8080,http,120,5.4,US
 10.0.0.1,1080,socks5,85,,DE
+10.0.0.2,1080,socks5,120,5.4,US
 ```
 
 ### JSON
@@ -150,9 +149,9 @@ host,port,protocol,latency_ms,download_mbps,country
 ```json
 [
   {
-    "host": "192.168.1.1",
-    "port": 8080,
-    "protocol": "http",
+    "host": "10.0.0.1",
+    "port": 1080,
+    "protocol": "socks5",
     "latencyMs": 120,
     "downloadMbps": 5.4,
     "country": "US"

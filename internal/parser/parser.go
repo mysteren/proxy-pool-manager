@@ -10,8 +10,10 @@ import (
 )
 
 // ParseText разбирает построчный список прокси.
-// Поддерживаются "ip:port" и "protocol://ip:port"; пустые строки и комментарии
-// (#, //) пропускаются. Протоколы: http/socks5 (https→http, socks4 пропускается).
+// Поддерживаются "ip:port" и "socks5://ip:port"; пустые строки и комментарии
+// (#, //) пропускаются. Приложение работает только с SOCKS5, поэтому строки
+// с другими протоколами (http/https/socks4) пропускаются, а строка без схемы
+// ("host:port") считается SOCKS5.
 func ParseText(content string) ([]models.ParsedProxy, error) {
 	out := make([]models.ParsedProxy, 0)
 	seen := make(map[string]struct{})
@@ -40,7 +42,7 @@ func ParseText(content string) ([]models.ParsedProxy, error) {
 }
 
 func parseLine(line string) (models.ParsedProxy, bool) {
-	protocol := "http"
+	protocol := ""
 	hostPort := line
 	if i := strings.Index(line, "://"); i >= 0 {
 		protocol = strings.ToLower(strings.TrimSpace(line[:i]))
@@ -79,18 +81,16 @@ func splitHostPort(s string) (string, string, bool) {
 }
 
 // normalizeProtocol приводит протокол к поддерживаемому виду.
-// Второе значение — false, если прокси нужно пропустить (socks4).
+// Приложение работает только с SOCKS5, поэтому остальные протоколы
+// (http/https/socks4 и неизвестные) пропускаются, а пустой протокол
+// (строка вида "host:port") считается SOCKS5.
+// Второе значение — false, если прокси нужно пропустить.
 func normalizeProtocol(p string) (string, bool) {
 	switch strings.ToLower(strings.TrimSpace(p)) {
-	case "", "http", "https":
-		return "http", true
-	case "socks5", "socks5h":
+	case "", "socks5", "socks5h":
 		return "socks5", true
-	case "socks4", "socks4a":
-		return "", false
 	default:
-		// Неизвестный протокол считаем http.
-		return "http", true
+		return "", false
 	}
 }
 

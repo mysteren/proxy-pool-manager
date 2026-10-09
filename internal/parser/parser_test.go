@@ -18,18 +18,16 @@ http://host.example:80/path
 	if err != nil {
 		t.Fatalf("ParseText: %v", err)
 	}
-	if len(got) != 4 {
-		t.Fatalf("ожидалось 4 прокси, получено %d: %+v", len(got), got)
+	if len(got) != 2 {
+		t.Fatalf("ожидалось 2 socks5-прокси (http/https/socks4 пропускаются), получено %d: %+v", len(got), got)
 	}
 
 	want := map[string]struct {
 		port     int
 		protocol string
 	}{
-		"192.168.1.1":  {8080, "http"},
-		"10.0.0.1":     {1080, "socks5"},
-		"203.0.113.5":  {3128, "http"}, // https нормализуется в http
-		"host.example": {80, "http"},
+		"192.168.1.1": {8080, "socks5"}, // строка без схемы считается socks5
+		"10.0.0.1":    {1080, "socks5"},
 	}
 	for _, p := range got {
 		w, ok := want[p.Host]
@@ -64,14 +62,11 @@ func TestParseJSONArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseJSON: %v", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("ожидалось 2 прокси (socks4 пропускается), получено %d: %+v", len(got), got)
+	if len(got) != 1 {
+		t.Fatalf("ожидалось 1 socks5-прокси (http/socks4 пропускаются), получено %d: %+v", len(got), got)
 	}
-	if got[0].Protocol != "http" || got[0].Country == nil || *got[0].Country != "US" {
-		t.Errorf("первая запись разобрана неверно: %+v", got[0])
-	}
-	if got[1].Protocol != "socks5" || got[1].Port != 1080 {
-		t.Errorf("вторая запись разобрана неверно: %+v", got[1])
+	if got[0].Protocol != "socks5" || got[0].Port != 1080 || got[0].Host != "2.2.2.2" {
+		t.Errorf("запись разобрана неверно: %+v", got[0])
 	}
 }
 
@@ -83,7 +78,7 @@ func TestParseJSONL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseJSON (JSONL): %v", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("ожидалось 2 прокси, получено %d", len(got))
+	if len(got) != 1 {
+		t.Fatalf("ожидалось 1 socks5-прокси (http пропускается), получено %d", len(got))
 	}
 }

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatRelative } from "@/lib/time";
-import { formatDownload, formatLatency, latencyVariant, protocolVariant } from "@/lib/proxy";
+import { formatDownload, formatLatency, latencyVariant } from "@/lib/proxy";
 import { countryFlag, countryName, formatDistance, haversineKm } from "@/lib/geo";
 import { toast } from "@/stores/toastStore";
 import { useTestStore } from "@/stores/testStore";
@@ -46,7 +46,6 @@ export function ProxiesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<Status>("all");
   const [noSource, setNoSource] = useState(false);
-  const [protocol, setProtocol] = useState("");
   const [maxLatency, setMaxLatency] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
@@ -76,7 +75,7 @@ export function ProxiesPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearch, status, noSource, protocol, maxLatency, pageSize]);
+  }, [debouncedSearch, status, noSource, maxLatency, pageSize]);
 
   const buildFilter = useCallback(
     (offset: number): ProxyFilter => {
@@ -84,7 +83,7 @@ export function ProxiesPage() {
         onlyWorking: null,
         unchecked: null,
         noSource: noSource ? true : null,
-        protocol: protocol || null,
+        protocol: "socks5",
         maxLatency: maxLatency ? Number(maxLatency) : null,
         search: debouncedSearch || null,
         sortBy,
@@ -102,7 +101,7 @@ export function ProxiesPage() {
       }
       return filter;
     },
-    [status, noSource, protocol, maxLatency, debouncedSearch, sortBy, sortDir, pageSize],
+    [status, noSource, maxLatency, debouncedSearch, sortBy, sortDir, pageSize],
   );
 
   const load = useCallback(
@@ -345,7 +344,7 @@ export function ProxiesPage() {
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b border-border px-6 py-4">
         <div>
-          <h1 className="text-lg font-semibold">Прокси</h1>
+          <h1 className="text-lg font-semibold">SOCKS5</h1>
           <p className="text-sm text-muted-foreground">
             Всего: {total} · рабочих: {workingTotal}
           </p>
@@ -385,15 +384,6 @@ export function ProxiesPage() {
             </button>
           ))}
         </div>
-        <select
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-          value={protocol}
-          onChange={(e) => setProtocol(e.target.value)}
-        >
-          <option value="">Все протоколы</option>
-          <option value="http">http</option>
-          <option value="socks5">socks5</option>
-        </select>
         <select
           className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
           value={maxLatency}
@@ -561,9 +551,6 @@ export function ProxiesPage() {
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("port")}>
                 Порт{sortIndicator("port")}
               </th>
-              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("protocol")}>
-                Протокол{sortIndicator("protocol")}
-              </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("country")}>
                 Страна{sortIndicator("country")}
               </th>
@@ -586,13 +573,13 @@ export function ProxiesPage() {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
                   Загрузка…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
                   Ничего не найдено.
                 </td>
               </tr>
@@ -610,9 +597,6 @@ export function ProxiesPage() {
                   <td className="px-4 py-2" />
                   <td className="px-4 py-2 font-mono">{p.host}</td>
                   <td className="px-4 py-2 font-mono">{p.port}</td>
-                  <td className="px-4 py-2">
-                    <Badge variant={protocolVariant(p.protocol)}>{p.protocol}</Badge>
-                  </td>
                   <td
                     className="px-4 py-2"
                     title={p.exitIp ? `${p.exitIp} · ${countryName(p.country)}` : countryName(p.country)}

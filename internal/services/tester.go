@@ -94,6 +94,11 @@ type proxyWorker func(ctx context.Context, p models.Proxy, cfg testConfig) TestR
 
 func boolPtr(b bool) *bool { return &b }
 
+func strPtr(s string) *string { return &s }
+
+// socks5Protocol — приложение работает только с SOCKS5 (плюс отдельно MTProto).
+const socks5Protocol = "socks5"
+
 // TestProxy проверяет один прокси синхронно и сохраняет результат.
 func (s *TesterService) TestProxy(id int64) (TestResult, error) {
 	p, err := s.storage.GetProxyByID(id)
@@ -128,19 +133,19 @@ func (s *TesterService) TestProxies(ids []int64) error {
 	return s.startBatch(len(ids), feed, s.testOne, s.storage.UpdateTestResult, 0)
 }
 
-// TestAll проверяет весь пул.
+// TestAll проверяет весь пул (только SOCKS5).
 func (s *TesterService) TestAll() error {
-	return s.startFilterBatch(models.ProxyFilter{})
+	return s.startFilterBatch(models.ProxyFilter{Protocol: strPtr(socks5Protocol)})
 }
 
 // TestNonWorking проверяет проверенные, но нерабочие прокси.
 func (s *TesterService) TestNonWorking() error {
-	return s.startFilterBatch(models.ProxyFilter{OnlyWorking: boolPtr(false), Unchecked: boolPtr(false)})
+	return s.startFilterBatch(models.ProxyFilter{Protocol: strPtr(socks5Protocol), OnlyWorking: boolPtr(false), Unchecked: boolPtr(false)})
 }
 
 // TestUnchecked проверяет прокси без статуса (ещё не проверенные).
 func (s *TesterService) TestUnchecked() error {
-	return s.startFilterBatch(models.ProxyFilter{Unchecked: boolPtr(true)})
+	return s.startFilterBatch(models.ProxyFilter{Protocol: strPtr(socks5Protocol), Unchecked: boolPtr(true)})
 }
 
 // GetMyLocation определяет местоположение пользователя (без прокси).

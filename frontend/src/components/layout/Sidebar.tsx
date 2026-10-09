@@ -10,7 +10,7 @@ interface NavItem {
 }
 
 const items: NavItem[] = [
-  { page: "proxies", label: "Прокси", icon: ListTree },
+  { page: "proxies", label: "SOCKS5", icon: ListTree },
   { page: "mtproto", label: "MTProto", icon: Send },
   { page: "sources", label: "Источники", icon: Rss },
   { page: "settings", label: "Настройки", icon: SettingsIcon },

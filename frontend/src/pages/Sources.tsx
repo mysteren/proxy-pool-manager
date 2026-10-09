@@ -223,7 +223,7 @@ export function SourcesPage() {
           {tab === "manual" && (
             <div className="flex flex-col gap-3">
               <Textarea
-                placeholder={"192.168.1.1:8080\nsocks5://10.0.0.1:1080"}
+                placeholder={"socks5://1.2.3.4:1080\n5.6.7.8:1080"}
                 value={manual}
                 onChange={(e) => setManual(e.target.value)}
               />

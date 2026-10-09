@@ -65,7 +65,7 @@ func TestAddFromURL(t *testing.T) {
 func TestAddFromURLJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"ip":"3.3.3.3","port":3128,"protocols":["http"],"country":"US"}]`))
+		_, _ = w.Write([]byte(`[{"ip":"3.3.3.3","port":3128,"protocols":["socks5"],"country":"US"}]`))
 	}))
 	defer srv.Close()
 
