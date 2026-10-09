@@ -20,7 +20,7 @@ Workflow `.github/workflows/release.yml` запускается на пуш те
 пакеты под все платформы, прикрепляя их к GitHub Release:
 
 - **Linux** (ubuntu-24.04): `.deb`, `.rpm`, `.AppImage`, `.pkg.tar.zst`;
-- **Windows** (windows-latest): установщик NSIS `proxy-pool-manager-installer.exe`;
+- **Windows** (windows-latest): установщик NSIS `proxy-pool-manager-amd64-installer.exe`;
 - **macOS** (macos-latest): `.dmg` (universal: arm64 + amd64).
 
 Выпуск:
@@ -65,7 +65,7 @@ gh release create v0.2.0 \
   --title "Proxy Pool Manager v0.2.0" \
   --generate-notes \
   bin/*.deb bin/*.rpm bin/*.AppImage bin/*.pkg.tar.zst \
-  build/windows/nsis/proxy-pool-manager-installer.exe \
+  bin/*-installer.exe \
   bin/*.dmg
 ```
 

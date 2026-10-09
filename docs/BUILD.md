@@ -172,7 +172,7 @@ wails3 task windows:package INSTALL_SCOPE=user  # для текущего пол
 
 Требуется `makensis` (Debian/Ubuntu: `sudo apt install nsis`). Дополнительно
 скачивается WebView2 bootstrapper, чтобы установщик не зависел от наличия
-WebView2 в системе. Результат — `build/windows/nsis/proxy-pool-manager-installer.exe`.
+WebView2 в системе. Результат — `bin/proxy-pool-manager-amd64-installer.exe`.
 
 MSIX (альтернативный формат):
 
