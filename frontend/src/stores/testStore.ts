@@ -35,8 +35,10 @@ export const useTestStore = create<TestState>((set) => ({
   lastResult: null,
   refreshToken: 0,
   start: () => set({ running: true, total: 0, completed: 0, current: "", lastResult: null }),
-  progress: (data) =>
-    set({ running: true, total: data.total, completed: data.completed, current: data.current }),
+  // Наличие проверки задаётся только start()/finish()/reset(); событие
+  // прогресса его не «пере-взводит» — иначе одиночное опоздавшее событие
+  // могло бы оставить running=true и навсегда заблокировать кнопки.
+  progress: (data) => set({ total: data.total, completed: data.completed, current: data.current }),
   finish: (data) =>
     set((state) => ({
       running: false,

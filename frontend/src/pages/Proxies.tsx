@@ -447,7 +447,6 @@ export function ProxiesPage() {
               size="sm"
               variant="ghost"
               onClick={() => setConfirm({ kind: "clear", label: selected.size > 0 ? `Сбросить статус у ${selected.size} выбранных?` : "Сбросить статус у всех по фильтру?" })}
-              disabled={running}
             >
               <Eraser className="size-3.5" />
               Очистить статус
@@ -456,7 +455,6 @@ export function ProxiesPage() {
               size="sm"
               variant="ghost"
               onClick={() => setConfirm({ kind: "deleteUnchecked", label: "Удалить все непроверенные прокси?" })}
-              disabled={running}
             >
               <Trash2 className="size-3.5" />
               Непроверенные
@@ -465,7 +463,6 @@ export function ProxiesPage() {
               size="sm"
               variant="ghost"
               onClick={() => setConfirm({ kind: "deleteBroken", label: "Удалить все нерабочие прокси?" })}
-              disabled={running}
             >
               <Trash2 className="size-3.5" />
               Нерабочие
@@ -474,7 +471,6 @@ export function ProxiesPage() {
               size="sm"
               variant="ghost"
               onClick={() => setConfirm({ kind: "deleteAll", label: "Удалить ВСЕ прокси из пула? Источники останутся." })}
-              disabled={running}
             >
               <Trash2 className="size-3.5" />
               Всё
