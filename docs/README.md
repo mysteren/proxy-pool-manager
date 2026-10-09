@@ -50,6 +50,7 @@ wails3 build
 - [TESTING_STRATEGY.md](TESTING_STRATEGY.md) — стратегия тестирования
 - [BUILD.md](BUILD.md) — сборка и упаковка для Linux/Windows/macOS
 - [RELEASE.md](RELEASE.md) — выпуск версии и публикация на GitHub
+- [SIGNING.md](SIGNING.md) — подпись сборок (Windows/macOS) через секреты
 - [ROADMAP.md](ROADMAP.md) — этапы разработки
 - [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) — работа с агентом через Zed
 

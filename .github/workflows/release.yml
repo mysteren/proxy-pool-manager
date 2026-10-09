@@ -2,6 +2,9 @@ name: Release
 
 # Запускается при пуше тега вида v0.2.0. Собирает пакеты для Linux, Windows и
 # macOS и прикрепляет их к GitHub Release с этим тегом.
+#
+# Подпись включается автоматически, если заданы соответствующие секреты
+# репозитория (см. docs/SIGNING.md). Без секретов сборки публикуются неподписанными.
 on:
   push:
     tags:
@@ -67,6 +70,20 @@ jobs:
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.27
       - name: Сборка установщика (NSIS)
         run: wails3 task windows:package
+      - name: Подпись установщика (если задан сертификат)
+        if: ${{ secrets.WIN_CERT_PFX_BASE64 != '' }}
+        shell: pwsh
+        env:
+          WIN_CERT_PFX_BASE64: ${{ secrets.WIN_CERT_PFX_BASE64 }}
+          WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($env:WIN_CERT_PFX_BASE64))
+          $installer = Get-ChildItem bin\*-installer.exe | Select-Object -First 1
+          wails3 tool sign --input $installer.FullName `
+            --certificate "$env:RUNNER_TEMP\cert.pfx" `
+            --password "$env:WIN_CERT_PASSWORD" `
+            --timestamp "http://timestamp.digicert.com"
+          Remove-Item "$env:RUNNER_TEMP\cert.pfx"
       - name: Публикация релиза
         uses: softprops/action-gh-release@v2
         with:
@@ -86,10 +103,45 @@ jobs:
           node-version: "22"
       - name: Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.27
-      - name: Сборка .app (universal) и .dmg
+      - name: Импорт сертификата (если задан)
+        if: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
         run: |
-          wails3 task darwin:package:universal
-          wails3 task darwin:create:dmg
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security import "$RUNNER_TEMP/cert.p12" -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+          rm "$RUNNER_TEMP/cert.p12"
+      - name: "Сборка .app (universal: arm64 + amd64)"
+        run: wails3 task darwin:package:universal
+      - name: Подпись .app (если задан сертификат)
+        if: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: wails3 tool sign --input "bin/proxy-pool-manager.app" --identity "$MACOS_SIGN_IDENTITY"
+      - name: Сборка .dmg
+        run: wails3 task darwin:create:dmg
+      - name: Профиль нотаризации (если заданы ключи Apple)
+        if: ${{ secrets.APPLE_ID != '' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool store-credentials "wails-notary" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+      - name: Нотаризация .dmg (если заданы ключи Apple)
+        if: ${{ secrets.APPLE_ID != '' }}
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          DMG=$(ls bin/*.dmg | head -n1)
+          wails3 tool sign --input "$DMG" --identity "$MACOS_SIGN_IDENTITY" --notarize --keychain-profile "wails-notary"
+          xcrun stapler staple "$DMG" || true
       - name: Публикация релиза
         uses: softprops/action-gh-release@v2
         with:
