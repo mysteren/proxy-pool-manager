@@ -3,6 +3,7 @@ import { Copy, Download, Eraser, Loader2, Play, RefreshCw, Trash2 } from "lucide
 
 import { TestProgressBar } from "@/components/TestProgressBar";
 import { Badge } from "@/components/ui/badge";
+import { Hint } from "@/components/ui/hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -384,39 +385,47 @@ export function MTProtoPage() {
           </>
         ) : (
           <>
-            <Button
-              size="sm"
-              onClick={() => runBatch(() => MTProtoService.TestProxies([...selected]), `Проверка запущена: ${selected.size}`)}
-              disabled={running || selected.size === 0}
-            >
-              <Play className="size-3.5" />
-              Проверить выбранные
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => runBatch(() => MTProtoService.TestUnchecked(), "Проверка без статуса запущена")}
-              disabled={running}
-            >
-              Без статуса
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => runBatch(() => MTProtoService.TestNonWorking(), "Проверка нерабочих запущена")}
-              disabled={running}
-            >
-              <RefreshCw className="size-3.5" />
-              Нерабочие
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => runBatch(() => MTProtoService.TestAll(), "Проверка всех запущена")}
-              disabled={running}
-            >
-              Проверить всё
-            </Button>
+            <Hint plain focusable={false} content={<><b>Проверить выбранные.</b> Проверить только выделенные Telegram-прокси.</>}>
+              <Button
+                size="sm"
+                onClick={() => runBatch(() => MTProtoService.TestProxies([...selected]), `Проверка запущена: ${selected.size}`)}
+                disabled={running || selected.size === 0}
+              >
+                <Play className="size-3.5" />
+                Проверить выбранные
+              </Button>
+            </Hint>
+            <Hint plain focusable={false} content={<><b>Без статуса.</b> Проверить Telegram-прокси, которые ещё ни разу не проверялись.</>}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runBatch(() => MTProtoService.TestUnchecked(), "Проверка без статуса запущена")}
+                disabled={running}
+              >
+                Без статуса
+              </Button>
+            </Hint>
+            <Hint plain focusable={false} content={<><b>Нерабочие.</b> Перепроверить прокси, помеченные нерабочими.</>}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runBatch(() => MTProtoService.TestNonWorking(), "Проверка нерабочих запущена")}
+                disabled={running}
+              >
+                <RefreshCw className="size-3.5" />
+                Нерабочие
+              </Button>
+            </Hint>
+            <Hint plain focusable={false} content={<><b>Проверить всё.</b> Проверить все Telegram-прокси. Порядок зависит от настройки «Проверять в случайном порядке».</>}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runBatch(() => MTProtoService.TestAll(), "Проверка всех запущена")}
+                disabled={running}
+              >
+                Проверить всё
+              </Button>
+            </Hint>
             <Button
               size="sm"
               variant="ghost"
@@ -499,28 +508,41 @@ export function MTProtoPage() {
                 />
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("host")}>
-                Host{sortIndicator("host")}
+                <Hint content={<><b>Host</b> — адрес MTProto-прокси (IP или домен).</>}>Host</Hint>
+                {sortIndicator("host")}
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("port")}>
-                Порт{sortIndicator("port")}
+                <Hint content={<><b>Порт</b> — TCP-порт прокси, обычно 443.</>}>Порт</Hint>
+                {sortIndicator("port")}
               </th>
-              <th className="px-4 py-2 font-medium">Тип</th>
-              <th className="px-4 py-2 font-medium">Секрет</th>
+              <th className="px-4 py-2 font-medium">
+                <Hint content={<><b>Тип</b> — MTProto — собственный прокси Telegram (маскировка FakeTLS/obfuscated); SOCKS — SOCKS5-прокси, поддерживающий MTProto.</>}>Тип</Hint>
+              </th>
+              <th className="px-4 py-2 font-medium">
+                <Hint content={<><b>Секрет</b> — секретный ключ прокси (hex или base64). Входит в ссылку tg://proxy и нужен Telegram для подключения.</>}>Секрет</Hint>
+              </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("score")}>
-                Оценка{sortIndicator("score")}
+                <Hint content={<><b>Оценка</b> — итоговый балл: надёжность (доля успешных рукопожатий) за вычетом пинга и джиттера. Чем больше — тем лучше; по нему сортировка по умолчанию.</>}>Оценка</Hint>
+                {sortIndicator("score")}
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("ping")}>
-                Пинг{sortIndicator("ping")}
+                <Hint content={<><b>Пинг</b> — средняя задержка рукопожатия за несколько попыток, в мс.</>}>Пинг</Hint>
+                {sortIndicator("ping")}
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("jitter")}>
-                Джиттер{sortIndicator("jitter")}
+                <Hint content={<><b>Джиттер</b> — разброс задержки между попытками, в мс. Чем меньше — тем стабильнее соединение.</>}>Джиттер</Hint>
+                {sortIndicator("jitter")}
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("success")}>
-                Успех{sortIndicator("success")}
+                <Hint content={<><b>Успех</b> — доля успешных рукопожатий: успешно / всего попыток.</>}>Успех</Hint>
+                {sortIndicator("success")}
               </th>
-              <th className="px-4 py-2 font-medium">Метод</th>
+              <th className="px-4 py-2 font-medium">
+                <Hint content={<><b>Метод</b> — как прокси ответил: faketls (маскировка рукопожатия под TLS) или obfuscated2.</>}>Метод</Hint>
+              </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("lastChecked")}>
-                Проверен{sortIndicator("lastChecked")}
+                <Hint content={<><b>Проверен</b> — когда прокси последний раз проверялся.</>}>Проверен</Hint>
+                {sortIndicator("lastChecked")}
               </th>
               <th className="w-24 px-4 py-2" />
             </tr>

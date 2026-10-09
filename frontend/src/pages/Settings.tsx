@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "@/stores/toastStore";
@@ -83,7 +84,9 @@ export function SettingsPage() {
               <section className="flex flex-col gap-3">
                 <h2 className="text-sm font-medium">Проверка прокси</h2>
                 <label className="flex flex-col gap-1 text-sm">
-                  Число одновременных проверок
+                  <Hint content={<><b>Число одновременных проверок.</b> Сколько прокси проверять параллельно. Меньше — ниже нагрузка на сеть и DNS, но обход идёт дольше.</>}>
+                    Число одновременных проверок
+                  </Hint>
                   <Input
                     type="number"
                     min={1}
@@ -97,7 +100,9 @@ export function SettingsPage() {
                   </span>
                 </label>
                 <label className="flex flex-col gap-1 text-sm">
-                  Таймаут проверки, мс
+                  <Hint content={<><b>Таймаут проверки.</b> Сколько ждать ответа от прокси. Больший таймаут повышает шанс поймать медленные прокси, но удлиняет обход.</>}>
+                    Таймаут проверки, мс
+                  </Hint>
                   <Input
                     type="number"
                     min={500}
@@ -109,7 +114,9 @@ export function SettingsPage() {
                   />
                 </label>
                 <label className="flex flex-col gap-1 text-sm">
-                  Размер файла для теста скорости, байт
+                  <Hint content={<><b>Размер файла для теста скорости.</b> Сколько байт скачивать через прокси. Больше — точнее результат, но дольше проверка.</>}>
+                    Размер файла для теста скорости, байт
+                  </Hint>
                   <Input
                     type="number"
                     min={100000}
@@ -127,7 +134,9 @@ export function SettingsPage() {
                     checked={settings.validateViaHttp}
                     onChange={(e) => update({ validateViaHttp: e.target.checked })}
                   />
-                  Подтверждать работоспособность HTTP-запросом через прокси
+                  <Hint content={<><b>HTTP-подтверждение.</b> Прокси считается рабочим не только по TCP-соединению, но и по реальному HTTP-ответу через него. Честнее, но медленнее.</>}>
+                    Подтверждать работоспособность HTTP-запросом через прокси
+                  </Hint>
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -136,7 +145,9 @@ export function SettingsPage() {
                     checked={settings.speedTest}
                     onChange={(e) => update({ speedTest: e.target.checked })}
                   />
-                  Измерять скорость при проверке
+                  <Hint content={<><b>Измерять скорость.</b> Замер скачивания при каждой проверке. Замедляет обход; нулевая скорость считается нерабочим прокси.</>}>
+                    Измерять скорость при проверке
+                  </Hint>
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -163,7 +174,9 @@ export function SettingsPage() {
                   </span>
                 </label>
                 <label className="flex flex-col gap-1 text-sm">
-                  URL для проверки
+                  <Hint content={<><b>URL для проверки.</b> Адрес, через который подтверждается работа прокси и берётся exit-IP/гео. При включённом консенсусе опрашиваются ещё и встроенные источники.</>}>
+                    URL для проверки
+                  </Hint>
                   <Input
                     value={settings.httpValidationUrl}
                     onChange={(e) => update({ httpValidationUrl: e.target.value })}

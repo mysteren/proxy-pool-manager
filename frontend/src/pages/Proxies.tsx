@@ -3,6 +3,7 @@ import { Copy, Download, Eraser, Loader2, Play, RefreshCw, Trash2 } from "lucide
 
 import { TestProgressBar } from "@/components/TestProgressBar";
 import { Badge } from "@/components/ui/badge";
+import { Hint } from "@/components/ui/hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -415,39 +416,47 @@ export function ProxiesPage() {
           </>
         ) : (
           <>
-            <Button
-              size="sm"
-              onClick={() => runBatch(() => TesterService.TestProxies([...selected]), `Проверка запущена: ${selected.size}`)}
-              disabled={running || selected.size === 0}
-            >
-              <Play className="size-3.5" />
-              Проверить выбранные
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => runBatch(() => TesterService.TestUnchecked(), "Проверка прокси без статуса запущена")}
-              disabled={running}
-            >
-              Без статуса
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => runBatch(() => TesterService.TestNonWorking(), "Проверка нерабочих прокси запущена")}
-              disabled={running}
-            >
-              <RefreshCw className="size-3.5" />
-              Нерабочие
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => runBatch(() => TesterService.TestAll(), "Проверка всего пула запущена")}
-              disabled={running}
-            >
-              Проверить всё
-            </Button>
+            <Hint plain focusable={false} content={<><b>Проверить выбранные.</b> Проверить только выделенные строки.</>}>
+              <Button
+                size="sm"
+                onClick={() => runBatch(() => TesterService.TestProxies([...selected]), `Проверка запущена: ${selected.size}`)}
+                disabled={running || selected.size === 0}
+              >
+                <Play className="size-3.5" />
+                Проверить выбранные
+              </Button>
+            </Hint>
+            <Hint plain focusable={false} content={<><b>Без статуса.</b> Проверить прокси, которые ещё ни разу не проверялись.</>}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runBatch(() => TesterService.TestUnchecked(), "Проверка прокси без статуса запущена")}
+                disabled={running}
+              >
+                Без статуса
+              </Button>
+            </Hint>
+            <Hint plain focusable={false} content={<><b>Нерабочие.</b> Перепроверить прокси, помеченные нерабочими (могли ожить).</>}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runBatch(() => TesterService.TestNonWorking(), "Проверка нерабочих прокси запущена")}
+                disabled={running}
+              >
+                <RefreshCw className="size-3.5" />
+                Нерабочие
+              </Button>
+            </Hint>
+            <Hint plain focusable={false} content={<><b>Проверить всё.</b> Проверить весь пул SOCKS5. На больших пулах идёт долго; порядок зависит от настройки «Проверять в случайном порядке».</>}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runBatch(() => TesterService.TestAll(), "Проверка всего пула запущена")}
+                disabled={running}
+              >
+                Проверить всё
+              </Button>
+            </Hint>
             <Button
               size="sm"
               variant="ghost"
@@ -529,26 +538,35 @@ export function ProxiesPage() {
                 />
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("host")}>
-                Host{sortIndicator("host")}
+                <Hint content={<><b>Host</b> — адрес прокси-сервера (IP или домен).</>}>Host</Hint>
+                {sortIndicator("host")}
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("port")}>
-                Порт{sortIndicator("port")}
+                <Hint content={<><b>Порт</b> — TCP-порт прокси-сервера.</>}>Порт</Hint>
+                {sortIndicator("port")}
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("country")}>
-                Страна{sortIndicator("country")}
+                <Hint content={<><b>Страна</b> — страна выходного узла (exit-IP). Определяется запросом через сам прокси по нескольким источникам и может отличаться от страны, где стоит сервер.</>}>Страна</Hint>
+                {sortIndicator("country")}
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("city")}>
-                Город{sortIndicator("city")}
+                <Hint content={<><b>Город</b> — город выходного узла, если источник его сообщил.</>}>Город</Hint>
+                {sortIndicator("city")}
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("latency")}>
-                Пинг{sortIndicator("latency")}
+                <Hint content={<><b>Пинг</b> — задержка TCP-соединения до прокси (RTT), в мс. Чем меньше — тем лучше.</>}>Пинг</Hint>
+                {sortIndicator("latency")}
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("download")}>
-                Скорость{sortIndicator("download")}
+                <Hint content={<><b>Скорость</b> — скорость скачивания через прокси, Мбит/с, замеряется в ходе проверки. Нулевая скорость считается нерабочим прокси.</>}>Скорость</Hint>
+                {sortIndicator("download")}
               </th>
-              <th className="px-4 py-2 font-medium">Расстояние</th>
+              <th className="px-4 py-2 font-medium">
+                <Hint content={<><b>Расстояние</b> — расстояние по прямой от вас до выходного узла (по координатам обоих). Приблизительное, зависит от точности геоданных.</>}>Расстояние</Hint>
+              </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("lastChecked")}>
-                Проверен{sortIndicator("lastChecked")}
+                <Hint content={<><b>Проверен</b> — когда прокси последний раз проверялся. Если давно — статус может быть устаревшим.</>}>Проверен</Hint>
+                {sortIndicator("lastChecked")}
               </th>
               <th className="w-24 px-4 py-2" />
             </tr>
