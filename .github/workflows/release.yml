@@ -122,7 +122,7 @@ jobs:
         if: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
         env:
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
-        run: wails3 tool sign --input "bin/proxy-pool-manager.app" --identity "$MACOS_SIGN_IDENTITY"
+        run: wails3 tool sign --input "bin/proxy-pool-manager.app" --identity "$MACOS_SIGN_IDENTITY" --hardened-runtime
       - name: Сборка .dmg
         run: wails3 task darwin:create:dmg
       - name: Профиль нотаризации (если заданы ключи Apple)
