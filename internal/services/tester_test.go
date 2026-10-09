@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -342,8 +343,11 @@ func TestRunGeoProvidersReserve(t *testing.T) {
 		{url: "reserve", reserve: true},
 	}
 	called := map[string]int{}
+	var mu sync.Mutex
 	fetch := func(_ context.Context, url string) (validationInfo, error) {
+		mu.Lock()
 		called[url]++
+		mu.Unlock()
 		if url == "primary-fail" {
 			return validationInfo{}, fmt.Errorf("fail")
 		}
@@ -352,7 +356,10 @@ func TestRunGeoProvidersReserve(t *testing.T) {
 
 	// quorum=2: основной ответил один, значит должен подключиться резервный.
 	info, ok := runGeoProviders(context.Background(), providers, fetch, 2)
-	if !ok || called["reserve"] == 0 {
+	mu.Lock()
+	reserveCalls := called["reserve"]
+	mu.Unlock()
+	if !ok || reserveCalls == 0 {
 		t.Fatalf("резерв не подключился: ok=%v calls=%v", ok, called)
 	}
 	if info.exitIP != "1.2.3.4" || info.country != "US" {
@@ -360,13 +367,33 @@ func TestRunGeoProvidersReserve(t *testing.T) {
 	}
 
 	// quorum достигнут основными — резерв не трогаем.
+	mu.Lock()
 	called = map[string]int{}
+	mu.Unlock()
 	providers[1] = geoProvider{url: "primary-ok2"}
 	if _, ok := runGeoProviders(context.Background(), providers, fetch, 2); !ok {
 		t.Fatal("ожидался успешный консенсус")
 	}
-	if called["reserve"] != 0 {
+	mu.Lock()
+	reserveCalls = called["reserve"]
+	mu.Unlock()
+	if reserveCalls != 0 {
 		t.Fatalf("резерв не должен вызываться: %v", called)
+	}
+}
+
+func TestAggregateSpeed(t *testing.T) {
+	if got := aggregateSpeed([]float64{5}); got != 5 {
+		t.Fatalf("одно значение: %v", got)
+	}
+	if got := aggregateSpeed([]float64{3, 7}); got != 7 {
+		t.Fatalf("два значения — максимум: %v", got)
+	}
+	if got := aggregateSpeed([]float64{9, 1, 5}); got != 5 {
+		t.Fatalf("три значения — медиана: %v", got)
+	}
+	if got := aggregateSpeed([]float64{1, 2, 3, 4}); got != 2.5 {
+		t.Fatalf("чётное — среднее двух средних: %v", got)
 	}
 }
 

@@ -57,6 +57,11 @@ export interface Settings {
      * GeoCacheTTLDays — сколько дней хранить гео в кэше (0 — бессрочно).
      */
     "geoCacheTtlDays": number;
+
+    /**
+     * SpeedSamples — сколько замеров скорости делать (1..3).
+     */
+    "speedSamples": number;
 }
 
 /**

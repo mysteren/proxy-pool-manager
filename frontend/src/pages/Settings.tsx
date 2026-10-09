@@ -158,6 +158,20 @@ export function SettingsPage() {
                     Измерять скорость при проверке
                   </Hint>
                 </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <Hint content={<><b>Замеров скорости.</b> Сколько раз мерить скорость: 1 — быстро; 2 — берётся максимум; 3 — медиана (устойчивее к выбросам). При 2–3 размер файла делится между замерами, поэтому трафик почти не растёт, но проверка дольше.</>}>
+                    Замеров скорости
+                  </Hint>
+                  <select
+                    className="h-9 w-56 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                    value={settings.speedSamples}
+                    onChange={(e) => update({ speedSamples: Number(e.target.value) })}
+                  >
+                    <option value={1}>1 — один замер</option>
+                    <option value={2}>2 — максимум</option>
+                    <option value={3}>3 — медиана</option>
+                  </select>
+                </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"

@@ -86,6 +86,7 @@ CREATE TABLE settings (
 | `test_random_order`       | `true`                               |
 | `geo_consensus`           | `true`                               |
 | `geo_cache_ttl_days`      | `30`                                 |
+| `speed_samples`           | `1`                                  |
 
 ## Go-модели
 

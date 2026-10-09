@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -123,6 +125,7 @@ type testConfig struct {
 	validationURL   string
 	geoConsensus    bool
 	speedBytes      int
+	speedSamples    int
 	speedURL        string
 	measureSpeed    bool
 }
@@ -398,6 +401,7 @@ func (s *TesterService) testConfig() (testConfig, error) {
 		validationURL:   st.HTTPValidationURL,
 		geoConsensus:    st.GeoConsensus,
 		speedBytes:      st.SpeedDownloadBytes,
+		speedSamples:    st.SpeedSamples,
 		speedURL:        fmt.Sprintf(cloudflareSpeedURLFormat, st.SpeedDownloadBytes),
 		measureSpeed:    st.SpeedTest,
 	}, nil
@@ -452,8 +456,32 @@ func (s *TesterService) testOne(ctx context.Context, p models.Proxy, cfg testCon
 }
 
 // measureSpeed измеряет скорость скачивания через прокси и возвращает Мбит/с.
-// Нулевой размер и ошибки — это ошибка (прокси не пропускает данные).
+// Делает несколько замеров (по настройке): при 2 берётся максимум, при 3 —
+// медиана (устойчиво к выбросам). При нескольких замерах размер файла делится
+// между ними, чтобы суммарный трафик не рос. Нулевой размер и ошибки — ошибка.
 func (s *TesterService) measureSpeed(ctx context.Context, p models.Proxy, cfg testConfig, timeout time.Duration) (*float64, error) {
+	samples := cfg.speedSamples
+	if samples < 1 {
+		samples = 1
+	}
+	bytes := cfg.speedBytes
+	if bytes <= 0 {
+		bytes = 1_000_000
+	}
+	if samples > 1 {
+		bytes /= samples
+		if bytes < 100_000 {
+			bytes = 100_000
+		}
+	}
+
+	// Для одного замера уважаем заданный URL (тесты/кастомный), иначе собираем
+	// URL из размера файла (с учётом деления на число замеров).
+	url := cfg.speedURL
+	if samples > 1 || url == "" {
+		url = fmt.Sprintf(cloudflareSpeedURLFormat, bytes)
+	}
+
 	transport, err := proxyTransport(p.Protocol, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)), timeout)
 	if err != nil {
 		return nil, err
@@ -461,13 +489,35 @@ func (s *TesterService) measureSpeed(ctx context.Context, p models.Proxy, cfg te
 	defer transport.CloseIdleConnections()
 
 	client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
+
+	speeds := make([]float64, 0, samples)
+	var lastErr error
+	for i := 0; i < samples; i++ {
+		if ctx.Err() != nil {
+			break
+		}
+		mbps, err := measureOnce(ctx, client, url)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		speeds = append(speeds, *mbps)
+	}
+	if len(speeds) == 0 {
+		if lastErr != nil {
+			return nil, lastErr
+		}
+		return nil, fmt.Errorf("нулевая скорость")
+	}
+	out := aggregateSpeed(speeds)
+	return &out, nil
+}
+
+// measureOnce делает один замер: скачивает url через готовый client и считает Мбит/с.
+func measureOnce(ctx context.Context, client *http.Client, url string) (*float64, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	url := cfg.speedURL
-	if url == "" {
-		url = fmt.Sprintf(cloudflareSpeedURLFormat, cfg.speedBytes)
-	}
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -492,6 +542,23 @@ func (s *TesterService) measureSpeed(ctx context.Context, p models.Proxy, cfg te
 	}
 	mbps := float64(n) * 8 / elapsed / 1e6
 	return &mbps, nil
+}
+
+// aggregateSpeed: 1 замер — как есть, 2 — максимум, 3+ — медиана.
+func aggregateSpeed(v []float64) float64 {
+	if len(v) == 1 {
+		return v[0]
+	}
+	if len(v) == 2 {
+		return math.Max(v[0], v[1])
+	}
+	sorted := append([]float64(nil), v...)
+	sort.Float64s(sorted)
+	n := len(sorted)
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
 }
 
 type validationInfo struct {

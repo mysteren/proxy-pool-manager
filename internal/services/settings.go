@@ -19,6 +19,7 @@ const (
 	keyTestRandomOrder    = "test_random_order"
 	keyGeoConsensus       = "geo_consensus"
 	keyGeoCacheTTLDays    = "geo_cache_ttl_days"
+	keySpeedSamples       = "speed_samples"
 )
 
 // Settings — пользовательские настройки приложения (camelCase для фронтенда).
@@ -38,6 +39,8 @@ type Settings struct {
 	GeoConsensus bool `json:"geoConsensus"`
 	// GeoCacheTTLDays — сколько дней хранить гео в кэше (0 — бессрочно).
 	GeoCacheTTLDays int `json:"geoCacheTtlDays"`
+	// SpeedSamples — сколько замеров скорости делать (1..3).
+	SpeedSamples int `json:"speedSamples"`
 }
 
 // DefaultSettings — значения по умолчанию (см. docs/DATA_MODEL.md).
@@ -54,6 +57,7 @@ func DefaultSettings() Settings {
 		TestRandomOrder:    true,
 		GeoConsensus:       true,
 		GeoCacheTTLDays:    30,
+		SpeedSamples:       1,
 	}
 }
 
@@ -127,6 +131,11 @@ func settingsFromMap(values map[string]string) Settings {
 			d.GeoCacheTTLDays = n
 		}
 	}
+	if v, ok := values[keySpeedSamples]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			d.SpeedSamples = n
+		}
+	}
 	return clampSettings(d)
 }
 
@@ -164,6 +173,12 @@ func clampSettings(s Settings) Settings {
 	if s.GeoCacheTTLDays > 365 {
 		s.GeoCacheTTLDays = 365
 	}
+	if s.SpeedSamples < 1 {
+		s.SpeedSamples = 1
+	}
+	if s.SpeedSamples > 3 {
+		s.SpeedSamples = 3
+	}
 	return s
 }
 
@@ -197,6 +212,7 @@ func (s *SettingsService) persist(in Settings) error {
 		keyTestRandomOrder:    strconv.FormatBool(in.TestRandomOrder),
 		keyGeoConsensus:       strconv.FormatBool(in.GeoConsensus),
 		keyGeoCacheTTLDays:    strconv.Itoa(in.GeoCacheTTLDays),
+		keySpeedSamples:       strconv.Itoa(in.SpeedSamples),
 	}
 	for key, value := range pairs {
 		if err := s.storage.SetSetting(key, value); err != nil {
