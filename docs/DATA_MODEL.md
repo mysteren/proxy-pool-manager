@@ -32,6 +32,15 @@ CREATE INDEX idx_proxies_protocol   ON proxies(protocol);
 CREATE INDEX idx_proxies_source     ON proxies(source_id);
 ```
 
+На больших пулах (десятки–сотни тысяч строк) выборка и сортировка заметно
+ускоряются составными индексами с `protocol` в начале (миграция `0005`):
+
+- счётчики: `(protocol, is_working)`, `(protocol, last_checked)` — покрывающие,
+  `COUNT(*)` по фильтру статуса идёт без полного скана;
+- сортировка: `(protocol, (latency_ms IS NULL), latency_ms, id)` и аналогичный
+  по `download_mbps`, плюс `(protocol, host, id)`, `(protocol, port, id)` —
+  без временного b-tree на каждый запрос.
+
 ### Таблица `sources`
 
 ```sql

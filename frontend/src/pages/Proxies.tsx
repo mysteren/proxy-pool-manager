@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Download, Eraser, Loader2, Play, RefreshCw, Trash2, X } from "lucide-react";
+import { Copy, Download, Eraser, Loader2, Play, RefreshCw, Trash2 } from "lucide-react";
 
+import { TestProgressBar } from "@/components/TestProgressBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,9 +56,6 @@ export function ProxiesPage() {
   const [checking, setChecking] = useState<Set<number>>(new Set());
 
   const running = useTestStore((s) => s.running);
-  const progressTotal = useTestStore((s) => s.total);
-  const progressCompleted = useTestStore((s) => s.completed);
-  const progressCurrent = useTestStore((s) => s.current);
   const refreshToken = useTestStore((s) => s.refreshToken);
   const startTest = useTestStore((s) => s.start);
   const resetTest = useTestStore((s) => s.reset);
@@ -105,18 +103,22 @@ export function ProxiesPage() {
   );
 
   const load = useCallback(
-    async (silent = false) => {
+    async (silent = false, withCounts = true) => {
       if (!silent) setLoading(true);
       try {
         const filter = buildFilter(page * pageSize);
-        const [list, count, workingCount] = await Promise.all([
-          ProxyService.GetProxies(filter),
-          ProxyService.CountProxies(filter),
-          ProxyService.CountProxies({ ...filter, onlyWorking: true, unchecked: null, limit: 0, offset: 0 }),
-        ]);
+        const list = await ProxyService.GetProxies(filter);
         setRows(list ?? []);
-        setTotal(count);
-        setWorkingTotal(workingCount);
+        // Счётчики — самые дорогие запросы (полный COUNT(*)), поэтому во время
+        // фонового обновления их пересчитываем реже.
+        if (withCounts) {
+          const [count, workingCount] = await Promise.all([
+            ProxyService.CountProxies(filter),
+            ProxyService.CountProxies({ ...filter, onlyWorking: true, unchecked: null, limit: 0, offset: 0 }),
+          ]);
+          setTotal(count);
+          setWorkingTotal(workingCount);
+        }
       } catch (err) {
         if (!silent) toast.error(`Не удалось загрузить пул: ${String(err)}`);
       } finally {
@@ -131,13 +133,16 @@ export function ProxiesPage() {
   }, [load, refreshToken]);
 
   // Статусы сохраняются в БД по мере проверки каждого прокси, а не в конце
-  // прогона. Поэтому во время массовой проверки периодически подтягиваем
-  // текущую страницу — результат появляется сразу, без ожидания конца обхода.
+  // прогона. Поэтому во время массовой проверки периодически подтягиваем только
+  // текущую страницу (один запрос с LIMIT), а тяжёлые COUNT(*) — раз в несколько
+  // секунд, чтобы не перегружать единственное соединение с БД.
   useEffect(() => {
     if (!running) return;
+    let tick = 0;
     const id = setInterval(() => {
-      void load(true);
-    }, 800);
+      tick += 1;
+      void load(true, tick % 5 === 0);
+    }, 1500);
     return () => clearInterval(id);
   }, [running, load]);
 
@@ -508,25 +513,7 @@ export function ProxiesPage() {
         )}
       </div>
 
-      {running && (
-        <div className="flex items-center gap-3 border-b border-border px-6 py-2 text-sm">
-          <span className="whitespace-nowrap">
-            Проверка: {progressCompleted}
-            {progressTotal ? ` / ${progressTotal}` : ""}
-          </span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded bg-muted">
-            <div
-              className="h-full rounded bg-primary transition-[width]"
-              style={{ width: `${progressTotal ? (progressCompleted / progressTotal) * 100 : 0}%` }}
-            />
-          </div>
-          <span className="w-40 truncate text-xs text-muted-foreground">{progressCurrent}</span>
-          <Button size="sm" variant="outline" onClick={() => void TesterService.Cancel()}>
-            <X className="size-3.5" />
-            Отмена
-          </Button>
-        </div>
-      )}
+      <TestProgressBar onCancel={() => void TesterService.Cancel()} />
 
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse text-sm">

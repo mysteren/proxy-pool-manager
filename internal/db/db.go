@@ -51,6 +51,10 @@ func Open(path string) (*sql.DB, error) {
 	for _, pragma := range []string{
 		"PRAGMA foreign_keys = ON;",
 		"PRAGMA busy_timeout = 5000;",
+		// Кэш страниц и сортировка в памяти — заметно ускоряет выборки и
+		// COUNT(*) по большим пулам (десятки–сотни тысяч строк).
+		"PRAGMA cache_size = -32000;", // ~32 МБ
+		"PRAGMA temp_store = MEMORY;",
 	} {
 		if _, err := conn.Exec(pragma); err != nil {
 			conn.Close()
