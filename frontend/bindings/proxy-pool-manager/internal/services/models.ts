@@ -52,6 +52,11 @@ export interface Settings {
      * GeoConsensus определяет IP/страну/город по нескольким источникам.
      */
     "geoConsensus": boolean;
+
+    /**
+     * GeoCacheTTLDays — сколько дней хранить гео в кэше (0 — бессрочно).
+     */
+    "geoCacheTtlDays": number;
 }
 
 /**

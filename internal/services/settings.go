@@ -3,6 +3,7 @@ package services
 import (
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Ключи настроек в таблице settings.
@@ -17,6 +18,7 @@ const (
 	keySpeedTestEnabled   = "speed_test_enabled"
 	keyTestRandomOrder    = "test_random_order"
 	keyGeoConsensus       = "geo_consensus"
+	keyGeoCacheTTLDays    = "geo_cache_ttl_days"
 )
 
 // Settings — пользовательские настройки приложения (camelCase для фронтенда).
@@ -34,6 +36,8 @@ type Settings struct {
 	TestRandomOrder bool `json:"testRandomOrder"`
 	// GeoConsensus определяет IP/страну/город по нескольким источникам.
 	GeoConsensus bool `json:"geoConsensus"`
+	// GeoCacheTTLDays — сколько дней хранить гео в кэше (0 — бессрочно).
+	GeoCacheTTLDays int `json:"geoCacheTtlDays"`
 }
 
 // DefaultSettings — значения по умолчанию (см. docs/DATA_MODEL.md).
@@ -49,6 +53,7 @@ func DefaultSettings() Settings {
 		SpeedTest:          true,
 		TestRandomOrder:    true,
 		GeoConsensus:       true,
+		GeoCacheTTLDays:    30,
 	}
 }
 
@@ -117,6 +122,11 @@ func settingsFromMap(values map[string]string) Settings {
 	if v, ok := values[keyGeoConsensus]; ok {
 		d.GeoConsensus = v != "false" && v != "0"
 	}
+	if v, ok := values[keyGeoCacheTTLDays]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			d.GeoCacheTTLDays = n
+		}
+	}
 	return clampSettings(d)
 }
 
@@ -148,7 +158,30 @@ func clampSettings(s Settings) Settings {
 	if strings.TrimSpace(s.HTTPValidationURL) == "" {
 		s.HTTPValidationURL = DefaultSettings().HTTPValidationURL
 	}
+	if s.GeoCacheTTLDays < 0 {
+		s.GeoCacheTTLDays = 0
+	}
+	if s.GeoCacheTTLDays > 365 {
+		s.GeoCacheTTLDays = 365
+	}
 	return s
+}
+
+// ClearGeoCache очищает кэш гео (кнопка в настройках).
+func (s *SettingsService) ClearGeoCache() (int, error) {
+	return s.storage.ClearGeoCache()
+}
+
+// geoCacheTTL возвращает срок жизни кэша гео (0 — бессрочно).
+func (s *SettingsService) geoCacheTTL() (time.Duration, error) {
+	st, err := s.Get()
+	if err != nil {
+		return 0, err
+	}
+	if st.GeoCacheTTLDays <= 0 {
+		return 0, nil
+	}
+	return time.Duration(st.GeoCacheTTLDays) * 24 * time.Hour, nil
 }
 
 func (s *SettingsService) persist(in Settings) error {
@@ -163,6 +196,7 @@ func (s *SettingsService) persist(in Settings) error {
 		keySpeedTestEnabled:   strconv.FormatBool(in.SpeedTest),
 		keyTestRandomOrder:    strconv.FormatBool(in.TestRandomOrder),
 		keyGeoConsensus:       strconv.FormatBool(in.GeoConsensus),
+		keyGeoCacheTTLDays:    strconv.Itoa(in.GeoCacheTTLDays),
 	}
 	for key, value := range pairs {
 		if err := s.storage.SetSetting(key, value); err != nil {

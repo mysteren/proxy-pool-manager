@@ -313,6 +313,7 @@ func (s *MTProtoService) runGeo(ctx context.Context, total int) {
 	client := &http.Client{Timeout: 8 * time.Second}
 	completed, resolved := 0, 0
 	last := time.Time{}
+	ttl, _ := s.settings.geoCacheTTL()
 
 	_ = s.storage.ForEachMTProtoMissingGeo(ctx, func(p models.MTProtoProxy) bool {
 		if ctx.Err() != nil {
@@ -329,7 +330,15 @@ func (s *MTProtoService) runGeo(ctx context.Context, total int) {
 		last = time.Now()
 
 		if ip := resolveServerIP(ctx, p); ip != "" {
-			if info, ok := lookupGeoByIP(ctx, client, ip); ok {
+			// Сначала кэш по IP — гео меняется редко.
+			info, ok := geoCacheLookup(s.storage, ip, ttl)
+			if !ok {
+				info, ok = lookupGeoByIP(ctx, client, ip)
+				if ok {
+					geoCacheStore(s.storage, ip, info)
+				}
+			}
+			if ok {
 				_ = s.storage.UpdateMTProtoGeo(p.ID, ip, info)
 				resolved++
 			}

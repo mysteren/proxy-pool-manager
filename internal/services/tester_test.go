@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -305,25 +306,67 @@ func TestConsensusGeo(t *testing.T) {
 	}
 }
 
-func TestValidationURLs(t *testing.T) {
-	urls := validationURLs(testConfig{validationURL: cloudflareMetaURL, geoConsensus: true})
-	if urls[0] != cloudflareMetaURL {
-		t.Fatalf("первый URL должен быть настроенным: %v", urls)
+func TestProxyGeoProviders(t *testing.T) {
+	providers := proxyGeoProviders(testConfig{validationURL: cloudflareMetaURL, geoConsensus: true})
+	if providers[0].url != cloudflareMetaURL {
+		t.Fatalf("первый источник должен быть настроенным: %v", providers)
 	}
 	seen := map[string]int{}
-	for _, u := range urls {
-		seen[u]++
+	for _, p := range providers {
+		seen[p.url]++
 	}
 	if seen[cloudflareMetaURL] != 1 {
-		t.Fatalf("дубликат Cloudflare: %v", urls)
+		t.Fatalf("дубликат Cloudflare: %v", providers)
 	}
-	if len(urls) != len(builtinGeoURLs) {
-		t.Fatalf("ожидалось %d источников, получено %d: %v", len(builtinGeoURLs), len(urls), urls)
+	if len(providers) != len(geoProxyProviders) {
+		t.Fatalf("ожидалось %d источников, получено %d", len(geoProxyProviders), len(providers))
 	}
 
-	only := validationURLs(testConfig{validationURL: "https://example.com/x", geoConsensus: false})
-	if len(only) != 1 || only[0] != "https://example.com/x" {
-		t.Fatalf("без консенсуса ожидался один URL: %v", only)
+	only := proxyGeoProviders(testConfig{validationURL: "https://example.com/x", geoConsensus: false})
+	if len(only) != 1 || only[0].url != "https://example.com/x" {
+		t.Fatalf("без консенсуса ожидался один источник: %v", only)
+	}
+
+	fallback := proxyGeoProviders(testConfig{geoConsensus: false})
+	if len(fallback) != 1 || fallback[0].url != cloudflareMetaURL {
+		t.Fatalf("без настроенного URL ожидался Cloudflare: %v", fallback)
+	}
+}
+
+// TestRunGeoProvidersReserve проверяет, что при нехватке основных источников
+// подключаются резервные (до достижения quorum).
+func TestRunGeoProvidersReserve(t *testing.T) {
+	providers := []geoProvider{
+		{url: "primary-ok"},
+		{url: "primary-fail"},
+		{url: "reserve", reserve: true},
+	}
+	called := map[string]int{}
+	fetch := func(_ context.Context, url string) (validationInfo, error) {
+		called[url]++
+		if url == "primary-fail" {
+			return validationInfo{}, fmt.Errorf("fail")
+		}
+		return validationInfo{exitIP: "1.2.3.4", country: "US"}, nil
+	}
+
+	// quorum=2: основной ответил один, значит должен подключиться резервный.
+	info, ok := runGeoProviders(context.Background(), providers, fetch, 2)
+	if !ok || called["reserve"] == 0 {
+		t.Fatalf("резерв не подключился: ok=%v calls=%v", ok, called)
+	}
+	if info.exitIP != "1.2.3.4" || info.country != "US" {
+		t.Fatalf("консенсус неверен: %+v", info)
+	}
+
+	// quorum достигнут основными — резерв не трогаем.
+	called = map[string]int{}
+	providers[1] = geoProvider{url: "primary-ok2"}
+	if _, ok := runGeoProviders(context.Background(), providers, fetch, 2); !ok {
+		t.Fatal("ожидался успешный консенсус")
+	}
+	if called["reserve"] != 0 {
+		t.Fatalf("резерв не должен вызываться: %v", called)
 	}
 }
 

@@ -15,6 +15,13 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as $models from "./models.js";
 
 /**
+ * ClearGeoCache очищает кэш гео (кнопка в настройках).
+ */
+export function ClearGeoCache(): $CancellablePromise<number> {
+    return $Call.ByID(1274674327);
+}
+
+/**
  * Get возвращает настройки с подстановкой значений по умолчанию.
  */
 export function Get(): $CancellablePromise<$models.Settings> {

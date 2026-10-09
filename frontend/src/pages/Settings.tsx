@@ -50,6 +50,15 @@ export function SettingsPage() {
     }
   };
 
+  const handleClearGeoCache = async () => {
+    try {
+      const count = await SettingsService.ClearGeoCache();
+      toast.success(`Гео-кэш очищен: ${count}`);
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
       <header className="border-b border-border px-6 py-4">
@@ -182,6 +191,28 @@ export function SettingsPage() {
                     onChange={(e) => update({ httpValidationUrl: e.target.value })}
                   />
                 </label>
+              </section>
+
+              <section className="flex flex-col gap-3">
+                <h2 className="text-sm font-medium">Гео</h2>
+                <label className="flex flex-col gap-1 text-sm">
+                  <Hint content={<><b>Срок хранения гео-кэша.</b> Гео узла (страна/город/координаты) меняется редко, поэтому результаты по IP кэшируются и переиспользуются. 0 — без срока.</>}>
+                    Срок хранения гео-кэша, дней
+                  </Hint>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={365}
+                    value={settings.geoCacheTtlDays}
+                    onChange={(e) => update({ geoCacheTtlDays: Number(e.target.value) })}
+                    className="w-40"
+                  />
+                </label>
+                <div>
+                  <Button variant="outline" size="sm" onClick={handleClearGeoCache}>
+                    Сбросить гео-кэш
+                  </Button>
+                </div>
               </section>
 
               <section className="flex flex-col gap-3">

@@ -28,14 +28,42 @@ const (
 	cloudflareSpeedURLFormat = "https://speed.cloudflare.com/__down?bytes=%d"
 )
 
-// builtinGeoURLs — независимые источники IP/гео для консенсусной проверки.
-// Запросы идут через сам прокси, поэтому со стороны приложения нет общего
-// лимита, а согласие нескольких источников отсекает ложные срабатывания.
-var builtinGeoURLs = []string{
-	cloudflareMetaURL,
-	"https://ipwho.is/",
-	"http://ip-api.com/json/?fields=status,country,countryCode,city,lat,lon,query",
+// geoProvider — источник IP/гео.
+// url — шаблон адреса; для byIP вместо IP подставляется %s.
+// reserve — резервный источник: подключается, если основных успешных не хватило.
+type geoProvider struct {
+	url     string
+	byIP    bool
+	reserve bool
 }
+
+// geoProxyProviders — источники, опрашиваемые ЧЕРЕЗ прокси: отвечают IP
+// вызывающего, т.е. exit-IP прокси. Согласие нескольких источников даёт
+// консенсус; резервные добираются, если основных не хватило до quorum.
+var geoProxyProviders = []geoProvider{
+	{url: cloudflareMetaURL},
+	{url: "https://ipwho.is/"},
+	{url: "http://ip-api.com/json/?fields=status,country,countryCode,city,lat,lon,query"},
+	{url: "https://ipinfo.io/json"},
+	{url: "https://ifconfig.co/json"},
+	{url: "https://api.ipify.org?format=json", reserve: true}, // только IP
+	{url: "https://ipwhois.app/json/", reserve: true},
+	{url: "https://ipapi.co/json/", reserve: true},
+}
+
+// geoIPProviders — источники гео ПО IP (для MTProto: через такой прокси HTTP
+// не провести, поэтому гео определяем по IP сервера).
+var geoIPProviders = []geoProvider{
+	{url: "https://ipwho.is/%s", byIP: true},
+	{url: "http://ip-api.com/json/%s?fields=status,country,countryCode,city,lat,lon,query", byIP: true},
+	{url: "https://ipinfo.io/%s/json", byIP: true},
+	{url: "https://ipwhois.app/json/%s", byIP: true},
+	{url: "https://ipapi.co/%s/json/", byIP: true, reserve: true},
+}
+
+// geoQuorum — сколько источников минимум должно ответить, чтобы считать
+// результат согласованным.
+const geoQuorum = 3
 
 // TestResult — результат проверки одного прокси.
 type TestResult struct {
@@ -165,19 +193,9 @@ func (s *TesterService) GetMyLocation() (MyLocation, error) {
 	defer cancel()
 	client := &http.Client{Timeout: 8 * time.Second}
 
-	results := make([]geoResponse, len(builtinGeoURLs))
-	var wg sync.WaitGroup
-	for i, u := range builtinGeoURLs {
-		wg.Add(1)
-		go func(i int, u string) {
-			defer wg.Done()
-			info, err := fetchGeoDirect(ctx, client, u)
-			results[i] = geoResponse{info: info, ok: err == nil}
-		}(i, u)
-	}
-	wg.Wait()
-
-	merged, ok := consensusGeo(results)
+	merged, ok := runGeoProviders(ctx, geoProxyProviders, func(ctx context.Context, url string) (validationInfo, error) {
+		return fetchGeoDirect(ctx, client, url)
+	}, geoQuorum)
 	if !ok {
 		return MyLocation{}, fmt.Errorf("не удалось определить местоположение")
 	}
@@ -211,29 +229,19 @@ func fetchGeoDirect(ctx context.Context, client *http.Client, target string) (va
 	return parseGeo(body), nil
 }
 
-// geoByIPURLs — источники гео для запроса ПО IP (без прокси). %s — сам IP.
-// Нужны для MTProto: через такой прокси HTTP-запрос не провести, поэтому гео
-// определяем по IP сервера.
-var geoByIPURLs = []string{
-	"https://ipwho.is/%s",
-	"http://ip-api.com/json/%s?fields=status,country,countryCode,city,lat,lon,query",
-	"https://ipinfo.io/%s/json",
-}
-
-// lookupGeoByIP определяет гео по IP через несколько источников (консенсус).
+// lookupGeoByIP определяет гео по IP через основные источники с добором из
+// резервных (нужно для MTProto: гео по IP сервера).
 func lookupGeoByIP(ctx context.Context, client *http.Client, ip string) (validationInfo, bool) {
-	results := make([]geoResponse, len(geoByIPURLs))
-	var wg sync.WaitGroup
-	for i, tmpl := range geoByIPURLs {
-		wg.Add(1)
-		go func(i int, target string) {
-			defer wg.Done()
-			info, err := fetchGeoDirect(ctx, client, target)
-			results[i] = geoResponse{info: info, ok: err == nil}
-		}(i, fmt.Sprintf(tmpl, ip))
+	providers := make([]geoProvider, len(geoIPProviders))
+	for i, p := range geoIPProviders {
+		if p.byIP {
+			p.url = fmt.Sprintf(p.url, ip)
+		}
+		providers[i] = p
 	}
-	wg.Wait()
-	return consensusGeo(results)
+	return runGeoProviders(ctx, providers, func(ctx context.Context, url string) (validationInfo, error) {
+		return fetchGeoDirect(ctx, client, url)
+	}, geoQuorum)
 }
 
 // resolveServerIP возвращает IP сервера прокси (из кэша или через DNS),
@@ -500,47 +508,45 @@ type geoResponse struct {
 	ok   bool
 }
 
-// validationURLs собирает список источников: настроенный URL плюс встроенные,
-// если включён консенсус (дубликаты убираются).
-func validationURLs(cfg testConfig) []string {
-	urls := make([]string, 0, len(builtinGeoURLs)+1)
+// proxyGeoProviders собирает источники для проверки через прокси: настроенный
+// URL (если задан) первым, затем встроенные (при включённом консенсусе).
+func proxyGeoProviders(cfg testConfig) []geoProvider {
+	list := make([]geoProvider, 0, len(geoProxyProviders)+1)
 	if u := strings.TrimSpace(cfg.validationURL); u != "" {
-		urls = append(urls, u)
+		list = append(list, geoProvider{url: u})
 	}
 	if cfg.geoConsensus {
-		for _, u := range builtinGeoURLs {
-			if !containsString(urls, u) {
-				urls = append(urls, u)
+		for _, p := range geoProxyProviders {
+			if !hasProviderURL(list, p.url) {
+				list = append(list, p)
 			}
 		}
 	}
-	if len(urls) == 0 {
-		urls = append(urls, cloudflareMetaURL)
+	if len(list) == 0 {
+		list = append(list, geoProvider{url: cloudflareMetaURL})
 	}
-	return urls
+	return list
 }
 
-// validateHTTP проверяет прокси через несколько независимых источников и
-// возвращает согласованный (консенсусный) результат. Прокси считается рабочим,
-// если ответил хотя бы один источник.
+func hasProviderURL(list []geoProvider, url string) bool {
+	for _, p := range list {
+		if p.url == url {
+			return true
+		}
+	}
+	return false
+}
+
+// validateHTTP проверяет прокси через несколько независимых источников
+// (основные + резервные) и возвращает согласованный результат. Прокси считается
+// рабочим, если ответил хотя бы один источник.
 func (s *TesterService) validateHTTP(ctx context.Context, p models.Proxy, cfg testConfig, timeout time.Duration) (validationInfo, error) {
 	addr := net.JoinHostPort(p.Host, strconv.Itoa(p.Port))
-	urls := validationURLs(cfg)
-	results := make([]geoResponse, len(urls))
-	var wg sync.WaitGroup
-	for i, u := range urls {
-		wg.Add(1)
-		go func(i int, u string) {
-			defer wg.Done()
-			info, err := fetchGeoThroughProxy(ctx, p.Protocol, addr, u, timeout)
-			results[i] = geoResponse{info: info, ok: err == nil}
-		}(i, u)
-	}
-	wg.Wait()
-
-	merged, ok := consensusGeo(results)
+	merged, ok := runGeoProviders(ctx, proxyGeoProviders(cfg), func(ctx context.Context, url string) (validationInfo, error) {
+		return fetchGeoThroughProxy(ctx, p.Protocol, addr, url, timeout)
+	}, geoQuorum)
 	if !ok {
-		return validationInfo{}, fmt.Errorf("прокси не ответил ни на один из %d источников", len(urls))
+		return validationInfo{}, fmt.Errorf("прокси не ответил ни на один источник")
 	}
 	return merged, nil
 }
@@ -650,7 +656,7 @@ func parseGeoJSON(body []byte) (validationInfo, bool) {
 	}
 	info := validationInfo{
 		exitIP:  firstString(m, "clientIp", "ip", "query"),
-		country: normalizeCountry(firstString(m, "countryCode", "country_code", "country")),
+		country: normalizeCountry(firstString(m, "countryCode", "country_code", "country_iso", "country")),
 		city:    firstString(m, "city"),
 	}
 	info.latitude = firstFloat(m, "latitude", "lat")
@@ -736,13 +742,75 @@ func mostCommon(counts map[string]int) string {
 	return best
 }
 
-func containsString(items []string, v string) bool {
-	for _, item := range items {
-		if item == v {
-			return true
+// geoFetchFunc — способ получить гео по конкретному URL (через прокси или напрямую).
+type geoFetchFunc func(ctx context.Context, url string) (validationInfo, error)
+
+// runGeoProviders опрашивает основные источники параллельно; если успешных
+// меньше quorum, добирает резервные. Возвращает консенсус по ответившим.
+func runGeoProviders(ctx context.Context, providers []geoProvider, fetch geoFetchFunc, quorum int) (validationInfo, bool) {
+	results := fetchProviders(ctx, filterProviders(providers, false), fetch)
+	if countGeoOK(results) < quorum {
+		results = append(results, fetchProviders(ctx, filterProviders(providers, true), fetch)...)
+	}
+	return consensusGeo(results)
+}
+
+func filterProviders(providers []geoProvider, reserve bool) []geoProvider {
+	out := make([]geoProvider, 0, len(providers))
+	for _, p := range providers {
+		if p.reserve == reserve {
+			out = append(out, p)
 		}
 	}
-	return false
+	return out
+}
+
+func fetchProviders(ctx context.Context, providers []geoProvider, fetch geoFetchFunc) []geoResponse {
+	results := make([]geoResponse, len(providers))
+	var wg sync.WaitGroup
+	for i, p := range providers {
+		wg.Add(1)
+		go func(i int, url string) {
+			defer wg.Done()
+			info, err := fetch(ctx, url)
+			results[i] = geoResponse{info: info, ok: err == nil}
+		}(i, p.url)
+	}
+	wg.Wait()
+	return results
+}
+
+func countGeoOK(results []geoResponse) int {
+	n := 0
+	for _, r := range results {
+		if r.ok {
+			n++
+		}
+	}
+	return n
+}
+
+// geoCacheLookup берёт гео по IP из кэша, если запись свежее ttl.
+func geoCacheLookup(storage *StorageService, ip string, ttl time.Duration) (validationInfo, bool) {
+	if ip == "" {
+		return validationInfo{}, false
+	}
+	info, fetchedAt, found, err := storage.GetGeoCache(ip)
+	if err != nil || !found {
+		return validationInfo{}, false
+	}
+	if ttl > 0 && time.Since(fetchedAt) > ttl {
+		return validationInfo{}, false
+	}
+	info.exitIP = ip
+	return info, true
+}
+
+func geoCacheStore(storage *StorageService, ip string, info validationInfo) {
+	if ip == "" {
+		return
+	}
+	_ = storage.PutGeoCache(ip, info)
 }
 
 func proxyTransport(protocol, addr string, timeout time.Duration) (*http.Transport, error) {
