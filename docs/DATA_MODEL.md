@@ -75,6 +75,7 @@ CREATE TABLE settings (
 | `http_validation_url`     | `https://speed.cloudflare.com/meta`  |
 | `speed_test_enabled`      | `true`                               |
 | `test_random_order`       | `true`                               |
+| `geo_consensus`           | `true`                               |
 
 ## Go-модели
 

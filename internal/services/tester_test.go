@@ -219,14 +219,111 @@ func TestValidationEmptyBodyNotWorking(t *testing.T) {
 	}
 }
 
-func TestParseMeta(t *testing.T) {
-	info := parseMeta([]byte(`{"clientIp":"1.2.3.4","country":"us","city":"Dallas","latitude":32.7,"longitude":-96.8}`))
-	if info.exitIP != "1.2.3.4" || info.country != "US" || info.city != "Dallas" || info.latitude == nil {
-		t.Fatalf("JSON meta разобран неверно: %+v", info)
+func TestParseGeo(t *testing.T) {
+	cases := []struct {
+		name    string
+		body    string
+		wantIP  string
+		wantCC  string
+		wantLat bool
+	}{
+		{
+			// Именно этот случай ломался: Cloudflare присылает координаты строкой.
+			name:    "cloudflare (координаты строкой)",
+			body:    `{"clientIp":"1.2.3.4","country":"US","city":"Dallas","latitude":"32.7767","longitude":"-96.7970"}`,
+			wantIP:  "1.2.3.4",
+			wantCC:  "US",
+			wantLat: true,
+		},
+		{
+			name:    "ipwho.is",
+			body:    `{"ip":"5.6.7.8","success":true,"country":"Germany","country_code":"DE","city":"Berlin","latitude":52.52,"longitude":13.405}`,
+			wantIP:  "5.6.7.8",
+			wantCC:  "DE",
+			wantLat: true,
+		},
+		{
+			name:    "ip-api",
+			body:    `{"status":"success","country":"United States","countryCode":"US","city":"Ashburn","lat":39.03,"lon":-77.5,"query":"9.9.9.9"}`,
+			wantIP:  "9.9.9.9",
+			wantCC:  "US",
+			wantLat: true,
+		},
+		{
+			name:    "ipinfo (loc строкой)",
+			body:    `{"ip":"8.8.8.8","city":"Mountain View","country":"US","loc":"37.4056,-122.0775"}`,
+			wantIP:  "8.8.8.8",
+			wantCC:  "US",
+			wantLat: true,
+		},
+		{
+			name:   "trace",
+			body:   "ip=5.6.7.8\nloc=DE\ncolo=FRA\n",
+			wantIP: "5.6.7.8",
+			wantCC: "DE",
+		},
 	}
-	trace := parseMeta([]byte("ip=5.6.7.8\nloc=DE\ncolo=FRA\n"))
-	if trace.exitIP != "5.6.7.8" || trace.country != "DE" {
-		t.Fatalf("trace разобран неверно: %+v", trace)
+	for _, tc := range cases {
+		info := parseGeo([]byte(tc.body))
+		if info.exitIP != tc.wantIP || info.country != tc.wantCC {
+			t.Errorf("%s: ip=%q country=%q, ожидалось ip=%q country=%q", tc.name, info.exitIP, info.country, tc.wantIP, tc.wantCC)
+		}
+		if tc.wantLat && (info.latitude == nil || info.longitude == nil) {
+			t.Errorf("%s: координаты не разобраны: %+v", tc.name, info)
+		}
+	}
+}
+
+func TestConsensusGeo(t *testing.T) {
+	lat, lon := 32.7, -96.8
+	merged, ok := consensusGeo([]geoResponse{
+		{ok: true, info: validationInfo{exitIP: "1.2.3.4", country: "US", city: "Dallas", latitude: &lat, longitude: &lon}},
+		{ok: true, info: validationInfo{exitIP: "1.2.3.4", country: "US", city: "Dallas"}},
+		{ok: false},
+	})
+	if !ok {
+		t.Fatal("ожидался успешный консенсус")
+	}
+	if merged.exitIP != "1.2.3.4" || merged.country != "US" || merged.city != "Dallas" {
+		t.Fatalf("консенсус неверен: %+v", merged)
+	}
+	if merged.latitude == nil || merged.longitude == nil {
+		t.Fatalf("координаты не выбраны: %+v", merged)
+	}
+
+	if _, ok := consensusGeo([]geoResponse{{ok: false}, {ok: false}}); ok {
+		t.Fatal("без ответивших консенсус не должен быть успешным")
+	}
+
+	merged2, _ := consensusGeo([]geoResponse{
+		{ok: true, info: validationInfo{exitIP: "1.1.1.1", country: "US"}},
+		{ok: true, info: validationInfo{exitIP: "1.1.1.1", country: "US"}},
+		{ok: true, info: validationInfo{exitIP: "2.2.2.2", country: "DE"}},
+	})
+	if merged2.exitIP != "1.1.1.1" || merged2.country != "US" {
+		t.Fatalf("большинство не взяло верх: %+v", merged2)
+	}
+}
+
+func TestValidationURLs(t *testing.T) {
+	urls := validationURLs(testConfig{validationURL: cloudflareMetaURL, geoConsensus: true})
+	if urls[0] != cloudflareMetaURL {
+		t.Fatalf("первый URL должен быть настроенным: %v", urls)
+	}
+	seen := map[string]int{}
+	for _, u := range urls {
+		seen[u]++
+	}
+	if seen[cloudflareMetaURL] != 1 {
+		t.Fatalf("дубликат Cloudflare: %v", urls)
+	}
+	if len(urls) != len(builtinGeoURLs) {
+		t.Fatalf("ожидалось %d источников, получено %d: %v", len(builtinGeoURLs), len(urls), urls)
+	}
+
+	only := validationURLs(testConfig{validationURL: "https://example.com/x", geoConsensus: false})
+	if len(only) != 1 || only[0] != "https://example.com/x" {
+		t.Fatalf("без консенсуса ожидался один URL: %v", only)
 	}
 }
 

@@ -47,6 +47,11 @@ export interface Settings {
      * TestRandomOrder обходит пул в случайном порядке (удобно искать рабочие).
      */
     "testRandomOrder": boolean;
+
+    /**
+     * GeoConsensus определяет IP/страну/город по нескольким источникам.
+     */
+    "geoConsensus": boolean;
 }
 
 /**

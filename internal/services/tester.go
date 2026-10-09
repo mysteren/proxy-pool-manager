@@ -28,6 +28,15 @@ const (
 	cloudflareSpeedURLFormat = "https://speed.cloudflare.com/__down?bytes=%d"
 )
 
+// builtinGeoURLs — независимые источники IP/гео для консенсусной проверки.
+// Запросы идут через сам прокси, поэтому со стороны приложения нет общего
+// лимита, а согласие нескольких источников отсекает ложные срабатывания.
+var builtinGeoURLs = []string{
+	cloudflareMetaURL,
+	"https://ipwho.is/",
+	"http://ip-api.com/json/?fields=status,country,countryCode,city,lat,lon,query",
+}
+
 // TestResult — результат проверки одного прокси.
 type TestResult struct {
 	ProxyID      int64    `json:"proxyId"`
@@ -84,6 +93,7 @@ type testConfig struct {
 	concurrency     int
 	validateViaHTTP bool
 	validationURL   string
+	geoConsensus    bool
 	speedBytes      int
 	speedURL        string
 	measureSpeed    bool
@@ -148,26 +158,57 @@ func (s *TesterService) TestUnchecked() error {
 	return s.startFilterBatch(models.ProxyFilter{Protocol: strPtr(socks5Protocol), Unchecked: boolPtr(true)})
 }
 
-// GetMyLocation определяет местоположение пользователя (без прокси).
+// GetMyLocation определяет местоположение пользователя (без прокси),
+// опрашивая несколько источников и согласуя результат.
 func (s *TesterService) GetMyLocation() (MyLocation, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(cloudflareMetaURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	client := &http.Client{Timeout: 8 * time.Second}
+
+	results := make([]geoResponse, len(builtinGeoURLs))
+	var wg sync.WaitGroup
+	for i, u := range builtinGeoURLs {
+		wg.Add(1)
+		go func(i int, u string) {
+			defer wg.Done()
+			info, err := fetchGeoDirect(ctx, client, u)
+			results[i] = geoResponse{info: info, ok: err == nil}
+		}(i, u)
+	}
+	wg.Wait()
+
+	merged, ok := consensusGeo(results)
+	if !ok {
+		return MyLocation{}, fmt.Errorf("не удалось определить местоположение")
+	}
+	return MyLocation{
+		IP:        merged.exitIP,
+		Country:   merged.country,
+		City:      merged.city,
+		Latitude:  merged.latitude,
+		Longitude: merged.longitude,
+	}, nil
+}
+
+func fetchGeoDirect(ctx context.Context, client *http.Client, target string) (validationInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return MyLocation{}, err
+		return validationInfo{}, err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return validationInfo{}, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
-	if err != nil {
-		return MyLocation{}, err
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return validationInfo{}, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	info := parseMeta(body)
-	return MyLocation{
-		IP:        info.exitIP,
-		Country:   info.country,
-		City:      info.city,
-		Latitude:  info.latitude,
-		Longitude: info.longitude,
-	}, nil
+	if len(bytes.TrimSpace(body)) == 0 {
+		return validationInfo{}, fmt.Errorf("пустой ответ")
+	}
+	return parseGeo(body), nil
 }
 
 // Cancel останавливает активную массовую проверку.
@@ -296,6 +337,7 @@ func (s *TesterService) testConfig() (testConfig, error) {
 		concurrency:     st.TestConcurrency,
 		validateViaHTTP: st.ValidateViaHTTP,
 		validationURL:   st.HTTPValidationURL,
+		geoConsensus:    st.GeoConsensus,
 		speedBytes:      st.SpeedDownloadBytes,
 		speedURL:        fmt.Sprintf(cloudflareSpeedURLFormat, st.SpeedDownloadBytes),
 		measureSpeed:    st.SpeedTest,
@@ -401,8 +443,59 @@ type validationInfo struct {
 	longitude *float64
 }
 
+// geoResponse — ответ одного источника (ok=false, если источник не ответил).
+type geoResponse struct {
+	info validationInfo
+	ok   bool
+}
+
+// validationURLs собирает список источников: настроенный URL плюс встроенные,
+// если включён консенсус (дубликаты убираются).
+func validationURLs(cfg testConfig) []string {
+	urls := make([]string, 0, len(builtinGeoURLs)+1)
+	if u := strings.TrimSpace(cfg.validationURL); u != "" {
+		urls = append(urls, u)
+	}
+	if cfg.geoConsensus {
+		for _, u := range builtinGeoURLs {
+			if !containsString(urls, u) {
+				urls = append(urls, u)
+			}
+		}
+	}
+	if len(urls) == 0 {
+		urls = append(urls, cloudflareMetaURL)
+	}
+	return urls
+}
+
+// validateHTTP проверяет прокси через несколько независимых источников и
+// возвращает согласованный (консенсусный) результат. Прокси считается рабочим,
+// если ответил хотя бы один источник.
 func (s *TesterService) validateHTTP(ctx context.Context, p models.Proxy, cfg testConfig, timeout time.Duration) (validationInfo, error) {
-	transport, err := proxyTransport(p.Protocol, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)), timeout)
+	addr := net.JoinHostPort(p.Host, strconv.Itoa(p.Port))
+	urls := validationURLs(cfg)
+	results := make([]geoResponse, len(urls))
+	var wg sync.WaitGroup
+	for i, u := range urls {
+		wg.Add(1)
+		go func(i int, u string) {
+			defer wg.Done()
+			info, err := fetchGeoThroughProxy(ctx, p.Protocol, addr, u, timeout)
+			results[i] = geoResponse{info: info, ok: err == nil}
+		}(i, u)
+	}
+	wg.Wait()
+
+	merged, ok := consensusGeo(results)
+	if !ok {
+		return validationInfo{}, fmt.Errorf("прокси не ответил ни на один из %d источников", len(urls))
+	}
+	return merged, nil
+}
+
+func fetchGeoThroughProxy(ctx context.Context, protocol, addr, target string, timeout time.Duration) (validationInfo, error) {
+	transport, err := proxyTransport(protocol, addr, timeout)
 	if err != nil {
 		return validationInfo{}, err
 	}
@@ -412,46 +505,114 @@ func (s *TesterService) validateHTTP(ctx context.Context, p models.Proxy, cfg te
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, cfg.validationURL, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, target, nil)
 	if err != nil {
 		return validationInfo{}, err
 	}
+	req.Header.Set("Accept", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
 		return validationInfo{}, err
 	}
 	defer resp.Body.Close()
+
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return validationInfo{}, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	if len(body) == 0 {
+	if len(bytes.TrimSpace(body)) == 0 {
 		return validationInfo{}, fmt.Errorf("пустой ответ прокси")
 	}
-	return parseMeta(body), nil
+	return parseGeo(body), nil
 }
 
-// parseMeta разбирает ответ Cloudflare /meta (JSON) или trace (key=value).
-func parseMeta(body []byte) validationInfo {
-	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) > 0 && trimmed[0] == '{' {
-		var meta struct {
-			ClientIP  string   `json:"clientIp"`
-			Country   string   `json:"country"`
-			City      string   `json:"city"`
-			Latitude  *float64 `json:"latitude"`
-			Longitude *float64 `json:"longitude"`
+// consensusGeo сводит ответы источников: exit-IP/страна/город — по большинству,
+// координаты — от источника, чей exit-IP совпал с консенсусным (иначе — первый
+// ответивший с координатами).
+func consensusGeo(results []geoResponse) (validationInfo, bool) {
+	ipCounts := map[string]int{}
+	countryCounts := map[string]int{}
+	cityCounts := map[string]int{}
+	responding := 0
+	for _, r := range results {
+		if !r.ok {
+			continue
 		}
-		if err := json.Unmarshal(trimmed, &meta); err == nil {
-			return validationInfo{
-				exitIP:    meta.ClientIP,
-				country:   strings.ToUpper(meta.Country),
-				city:      meta.City,
-				latitude:  meta.Latitude,
-				longitude: meta.Longitude,
-			}
+		responding++
+		if r.info.exitIP != "" {
+			ipCounts[r.info.exitIP]++
+		}
+		if r.info.country != "" {
+			countryCounts[r.info.country]++
+		}
+		if r.info.city != "" {
+			cityCounts[r.info.city]++
 		}
 	}
+	if responding == 0 {
+		return validationInfo{}, false
+	}
+	merged := validationInfo{
+		exitIP:  mostCommon(ipCounts),
+		country: mostCommon(countryCounts),
+		city:    mostCommon(cityCounts),
+	}
+	coordsFrom := func(matchIP bool) *validationInfo {
+		for i := range results {
+			r := &results[i]
+			if !r.ok || r.info.latitude == nil || r.info.longitude == nil {
+				continue
+			}
+			if matchIP && merged.exitIP != "" && r.info.exitIP != merged.exitIP {
+				continue
+			}
+			return &r.info
+		}
+		return nil
+	}
+	if info := coordsFrom(true); info != nil {
+		merged.latitude, merged.longitude = info.latitude, info.longitude
+	} else if info := coordsFrom(false); info != nil {
+		merged.latitude, merged.longitude = info.latitude, info.longitude
+	}
+	return merged, true
+}
+
+// parseGeo вытаскивает exit-IP, страну, город и координаты из ответа источника.
+// Поддерживаются JSON (Cloudflare /meta, ip-api, ipwho.is, ipinfo) и trace
+// (key=value). Разбор устойчив: координаты-строки тоже принимаются, а битое
+// поле не обнуляет остальные.
+func parseGeo(body []byte) validationInfo {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		if info, ok := parseGeoJSON(trimmed); ok {
+			return info
+		}
+	}
+	return parseGeoKeyValue(trimmed)
+}
+
+func parseGeoJSON(body []byte) (validationInfo, bool) {
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		return validationInfo{}, false
+	}
+	info := validationInfo{
+		exitIP:  firstString(m, "clientIp", "ip", "query"),
+		country: normalizeCountry(firstString(m, "countryCode", "country_code", "country")),
+		city:    firstString(m, "city"),
+	}
+	info.latitude = firstFloat(m, "latitude", "lat")
+	info.longitude = firstFloat(m, "longitude", "lon", "lng")
+	if info.latitude == nil || info.longitude == nil {
+		if lat, lon, ok := splitCoords(firstString(m, "loc")); ok {
+			info.latitude, info.longitude = lat, lon
+		}
+	}
+	return info, true
+}
+
+func parseGeoKeyValue(body []byte) validationInfo {
 	var info validationInfo
 	for _, line := range strings.Split(string(body), "\n") {
 		key, value, ok := strings.Cut(line, "=")
@@ -462,10 +623,75 @@ func parseMeta(body []byte) validationInfo {
 		case "ip":
 			info.exitIP = strings.TrimSpace(value)
 		case "loc":
-			info.country = strings.ToUpper(strings.TrimSpace(value))
+			info.country = normalizeCountry(value)
 		}
 	}
 	return info
+}
+
+func firstString(m map[string]any, keys ...string) string {
+	for _, k := range keys {
+		if s, ok := m[k].(string); ok {
+			if s = strings.TrimSpace(s); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// firstFloat принимает число или строку — источники присылают координаты и так, и так.
+func firstFloat(m map[string]any, keys ...string) *float64 {
+	for _, k := range keys {
+		switch v := m[k].(type) {
+		case float64:
+			return &v
+		case string:
+			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
+				return &f
+			}
+		}
+	}
+	return nil
+}
+
+func splitCoords(s string) (*float64, *float64, bool) {
+	latStr, lonStr, ok := strings.Cut(s, ",")
+	if !ok {
+		return nil, nil, false
+	}
+	lat, err1 := strconv.ParseFloat(strings.TrimSpace(latStr), 64)
+	lon, err2 := strconv.ParseFloat(strings.TrimSpace(lonStr), 64)
+	if err1 != nil || err2 != nil {
+		return nil, nil, false
+	}
+	return &lat, &lon, true
+}
+
+func normalizeCountry(s string) string {
+	return strings.ToUpper(strings.TrimSpace(s))
+}
+
+// mostCommon возвращает самое частое значение; при равенстве — лексикографически
+// меньшее (детерминированно).
+func mostCommon(counts map[string]int) string {
+	best := ""
+	bestN := 0
+	for k, n := range counts {
+		if n > bestN || (n == bestN && k < best) {
+			best, bestN = k, n
+		}
+	}
+	return best
+}
+
+func containsString(items []string, v string) bool {
+	for _, item := range items {
+		if item == v {
+			return true
+		}
+	}
+	return false
 }
 
 func proxyTransport(protocol, addr string, timeout time.Duration) (*http.Transport, error) {

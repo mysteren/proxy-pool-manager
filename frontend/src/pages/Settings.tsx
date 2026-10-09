@@ -150,6 +150,18 @@ export function SettingsPage() {
                     — помогает быстро найти рабочие в большом пуле
                   </span>
                 </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={settings.geoConsensus}
+                    onChange={(e) => update({ geoConsensus: e.target.checked })}
+                  />
+                  Гео и IP по нескольким источникам (консенсус)
+                  <span className="text-xs text-muted-foreground">
+                    — страна/город/координаты определяются большинством голосов
+                  </span>
+                </label>
                 <label className="flex flex-col gap-1 text-sm">
                   URL для проверки
                   <Input

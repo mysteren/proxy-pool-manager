@@ -22,7 +22,8 @@ export function Cancel(): $CancellablePromise<void> {
 }
 
 /**
- * GetMyLocation определяет местоположение пользователя (без прокси).
+ * GetMyLocation определяет местоположение пользователя (без прокси),
+ * опрашивая несколько источников и согласуя результат.
  */
 export function GetMyLocation(): $CancellablePromise<$models.MyLocation> {
     return $Call.ByID(3609596264);

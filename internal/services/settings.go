@@ -16,6 +16,7 @@ const (
 	keyHTTPValidationURL  = "http_validation_url"
 	keySpeedTestEnabled   = "speed_test_enabled"
 	keyTestRandomOrder    = "test_random_order"
+	keyGeoConsensus       = "geo_consensus"
 )
 
 // Settings — пользовательские настройки приложения (camelCase для фронтенда).
@@ -31,6 +32,8 @@ type Settings struct {
 	SpeedTest bool `json:"speedTest"`
 	// TestRandomOrder обходит пул в случайном порядке (удобно искать рабочие).
 	TestRandomOrder bool `json:"testRandomOrder"`
+	// GeoConsensus определяет IP/страну/город по нескольким источникам.
+	GeoConsensus bool `json:"geoConsensus"`
 }
 
 // DefaultSettings — значения по умолчанию (см. docs/DATA_MODEL.md).
@@ -45,6 +48,7 @@ func DefaultSettings() Settings {
 		HTTPValidationURL:  cloudflareMetaURL,
 		SpeedTest:          true,
 		TestRandomOrder:    true,
+		GeoConsensus:       true,
 	}
 }
 
@@ -110,6 +114,9 @@ func settingsFromMap(values map[string]string) Settings {
 	if v, ok := values[keyTestRandomOrder]; ok {
 		d.TestRandomOrder = v != "false" && v != "0"
 	}
+	if v, ok := values[keyGeoConsensus]; ok {
+		d.GeoConsensus = v != "false" && v != "0"
+	}
 	return clampSettings(d)
 }
 
@@ -155,6 +162,7 @@ func (s *SettingsService) persist(in Settings) error {
 		keyHTTPValidationURL:  in.HTTPValidationURL,
 		keySpeedTestEnabled:   strconv.FormatBool(in.SpeedTest),
 		keyTestRandomOrder:    strconv.FormatBool(in.TestRandomOrder),
+		keyGeoConsensus:       strconv.FormatBool(in.GeoConsensus),
 	}
 	for key, value := range pairs {
 		if err := s.storage.SetSetting(key, value); err != nil {
