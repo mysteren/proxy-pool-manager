@@ -158,6 +158,52 @@ export function SettingsPage() {
                     Не проверять TLS-сертификат (небезопасно)
                   </Hint>
                 </label>
+                <details className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer select-none font-medium text-foreground">
+                    TLS-ошибки из-за сбитого времени? Как синхронизировать часы
+                  </summary>
+                  <div className="mt-2 space-y-3 leading-relaxed">
+                    <p>
+                      Сертификаты проверяются по системному времени: при расхождении часов HTTPS падает
+                      («not yet valid» / «certificate expired»). Синхронизируйте часы:
+                    </p>
+                    <div>
+                      <span className="font-medium text-foreground">Windows</span>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                        <li>
+                          в командной строке от администратора: <code>w32tm /resync</code>
+                        </li>
+                        <li>или Параметры → Время и язык → Дата и время → «Синхронизировать»</li>
+                        <li>
+                          проверить службу: <code>sc query w32time</code> (должна быть <code>RUNNING</code>)
+                        </li>
+                      </ul>
+                    </div>
+                    <div>
+                      <span className="font-medium text-foreground">Linux (systemd)</span>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                        <li>
+                          включить синхронизацию: <code>sudo timedatectl set-ntp true</code>
+                        </li>
+                        <li>
+                          проверить: <code>timedatectl</code> — должно быть «synchronized: yes»
+                        </li>
+                        <li>
+                          если демона нет: <code>sudo systemctl enable --now systemd-timesyncd</code>
+                        </li>
+                        <li>
+                          Fedora / Arch (chrony): <code>sudo systemctl enable --now chronyd</code>
+                        </li>
+                      </ul>
+                    </div>
+                    <p>
+                      <span className="font-medium text-foreground">Двойная загрузка (Windows + Linux):</span> часы
+                      сбиваются при перезагрузке, если системы по-разному трактуют RTC. В Linux держите RTC
+                      в UTC — <code>timedatectl set-local-rtc 0</code>, — либо переведите Windows на UTC: в реестре
+                      задайте <code>RealTimeIsUniversal = 1</code> (DWORD).
+                    </p>
+                  </div>
+                </details>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
