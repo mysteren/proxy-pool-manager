@@ -248,3 +248,53 @@ func TestForEachProxyAndClearStatus(t *testing.T) {
 		t.Fatalf("ClearStatus сбросил %d, ожидалось 1", cleared)
 	}
 }
+
+func TestForEachProxyRandom(t *testing.T) {
+	s := newTestStorage(t)
+	const n = 12
+	proxies := make([]models.ParsedProxy, n)
+	for i := range proxies {
+		proto := "socks5"
+		if i%2 == 0 {
+			proto = "http"
+		}
+		proxies[i] = models.ParsedProxy{Host: fmt.Sprintf("r%d.example", i), Port: 3000 + i, Protocol: proto}
+	}
+	if _, err := s.InsertProxies(proxies, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Обход в случайном порядке заходит на каждую подходящую строку ровно один раз
+	// и не трогает чужие протоколы.
+	seen := map[int64]int{}
+	err := s.ForEachProxyRandom(context.Background(), models.ProxyFilter{Protocol: strPtr("socks5")}, func(p models.Proxy) bool {
+		if p.Protocol != "socks5" {
+			t.Errorf("в выборку попал чужой протокол: %+v", p)
+		}
+		seen[p.ID]++
+		return true
+	})
+	if err != nil {
+		t.Fatalf("ForEachProxyRandom: %v", err)
+	}
+	if len(seen) != n/2 {
+		t.Fatalf("просмотрено %d socks5-прокси, ожидалось %d", len(seen), n/2)
+	}
+	for id, c := range seen {
+		if c != 1 {
+			t.Fatalf("id=%d встретился %d раз", id, c)
+		}
+	}
+
+	// Остановка по false.
+	stopped := 0
+	if err := s.ForEachProxyRandom(context.Background(), models.ProxyFilter{Protocol: strPtr("socks5")}, func(models.Proxy) bool {
+		stopped++
+		return false
+	}); err != nil {
+		t.Fatalf("ForEachProxyRandom (stop): %v", err)
+	}
+	if stopped != 1 {
+		t.Fatalf("остановка сработала на %d-й строке, ожидалось 1", stopped)
+	}
+}

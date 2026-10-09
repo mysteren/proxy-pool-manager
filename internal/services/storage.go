@@ -372,6 +372,61 @@ func (s *StorageService) ForEachProxy(ctx context.Context, f models.ProxyFilter,
 	}
 }
 
+// ForEachProxyRandom пролистывает прокси под фильтр в случайном порядке.
+// Сначала выбираются все подходящие id в случайном порядке, затем строки
+// отдаются порциями (в память попадает лишь список id — 8 байт на запись).
+// Нужно, чтобы при обходе большого пула быстро находить рабочие прокси:
+// прогресс становится случайной выборкой, а не «первыми по id».
+func (s *StorageService) ForEachProxyRandom(ctx context.Context, f models.ProxyFilter, fn func(models.Proxy) bool) error {
+	where, args := buildProxyWhere(f)
+	ids, err := s.proxyIDsRandom(where, args...)
+	if err != nil {
+		return err
+	}
+	for start := 0; start < len(ids); start += idChunkSize {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		end := min(start+idChunkSize, len(ids))
+		batch := ids[start:end]
+		proxies, err := s.GetProxiesByIDs(batch)
+		if err != nil {
+			return err
+		}
+		byID := make(map[int64]models.Proxy, len(proxies))
+		for _, p := range proxies {
+			byID[p.ID] = p
+		}
+		for _, id := range batch {
+			p, ok := byID[id]
+			if !ok {
+				continue
+			}
+			if !fn(p) {
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+func (s *StorageService) proxyIDsRandom(where string, args ...any) ([]int64, error) {
+	rows, err := s.db.Query("SELECT id FROM proxies"+where+" ORDER BY RANDOM()", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // ForEachProxyByIDs пролистывает прокси по списку ID чанками.
 func (s *StorageService) ForEachProxyByIDs(ctx context.Context, ids []int64, fn func(models.Proxy) bool) error {
 	for start := 0; start < len(ids); start += idChunkSize {

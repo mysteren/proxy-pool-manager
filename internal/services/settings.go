@@ -15,6 +15,7 @@ const (
 	keyValidateViaHTTP    = "validate_via_http"
 	keyHTTPValidationURL  = "http_validation_url"
 	keySpeedTestEnabled   = "speed_test_enabled"
+	keyTestRandomOrder    = "test_random_order"
 )
 
 // Settings — пользовательские настройки приложения (camelCase для фронтенда).
@@ -28,6 +29,8 @@ type Settings struct {
 	HTTPValidationURL  string `json:"httpValidationUrl"`
 	// SpeedTest включает измерение скорости в ходе обычной проверки.
 	SpeedTest bool `json:"speedTest"`
+	// TestRandomOrder обходит пул в случайном порядке (удобно искать рабочие).
+	TestRandomOrder bool `json:"testRandomOrder"`
 }
 
 // DefaultSettings — значения по умолчанию (см. docs/DATA_MODEL.md).
@@ -41,6 +44,7 @@ func DefaultSettings() Settings {
 		ValidateViaHTTP:    true,
 		HTTPValidationURL:  cloudflareMetaURL,
 		SpeedTest:          true,
+		TestRandomOrder:    true,
 	}
 }
 
@@ -103,6 +107,9 @@ func settingsFromMap(values map[string]string) Settings {
 	if v, ok := values[keySpeedTestEnabled]; ok {
 		d.SpeedTest = v != "false" && v != "0"
 	}
+	if v, ok := values[keyTestRandomOrder]; ok {
+		d.TestRandomOrder = v != "false" && v != "0"
+	}
 	return clampSettings(d)
 }
 
@@ -147,6 +154,7 @@ func (s *SettingsService) persist(in Settings) error {
 		keyValidateViaHTTP:    strconv.FormatBool(in.ValidateViaHTTP),
 		keyHTTPValidationURL:  in.HTTPValidationURL,
 		keySpeedTestEnabled:   strconv.FormatBool(in.SpeedTest),
+		keyTestRandomOrder:    strconv.FormatBool(in.TestRandomOrder),
 	}
 	for key, value := range pairs {
 		if err := s.storage.SetSetting(key, value); err != nil {

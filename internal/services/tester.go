@@ -188,7 +188,18 @@ func (s *TesterService) startFilterBatch(filter models.ProxyFilter) error {
 	if total == 0 {
 		return fmt.Errorf("нет прокси для проверки")
 	}
+	// Порядок обхода — по настройке. Случайный порядок удобен, когда нужно
+	// быстро выудить рабочие прокси из большого пула.
+	st, err := s.settings.Get()
+	if err != nil {
+		return err
+	}
+	random := st.TestRandomOrder
 	feed := func(ctx context.Context, yield func(models.Proxy) bool) {
+		if random {
+			_ = s.storage.ForEachProxyRandom(ctx, filter, yield)
+			return
+		}
 		_ = s.storage.ForEachProxy(ctx, filter, 500, yield)
 	}
 	return s.startBatch(total, feed, s.testOne, s.storage.UpdateTestResult, 0)

@@ -42,6 +42,11 @@ export interface Settings {
      * SpeedTest включает измерение скорости в ходе обычной проверки.
      */
     "speedTest": boolean;
+
+    /**
+     * TestRandomOrder обходит пул в случайном порядке (удобно искать рабочие).
+     */
+    "testRandomOrder": boolean;
 }
 
 /**

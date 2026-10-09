@@ -72,7 +72,9 @@ CREATE TABLE settings (
 | `test_concurrency`        | `50`                                 |
 | `copy_format`             | `uri`                                |
 | `validate_via_http`       | `true`                               |
-| `http_validation_url`     | `https://api.ipify.org?format=json`  |
+| `http_validation_url`     | `https://speed.cloudflare.com/meta`  |
+| `speed_test_enabled`      | `true`                               |
+| `test_random_order`       | `true`                               |
 
 ## Go-модели
 

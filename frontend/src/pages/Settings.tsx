@@ -138,6 +138,18 @@ export function SettingsPage() {
                   />
                   Измерять скорость при проверке
                 </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={settings.testRandomOrder}
+                    onChange={(e) => update({ testRandomOrder: e.target.checked })}
+                  />
+                  Проверять в случайном порядке
+                  <span className="text-xs text-muted-foreground">
+                    — помогает быстро найти рабочие в большом пуле
+                  </span>
+                </label>
                 <label className="flex flex-col gap-1 text-sm">
                   URL для проверки
                   <Input
