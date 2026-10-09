@@ -151,6 +151,17 @@ export function SettingsPage() {
                   <input
                     type="checkbox"
                     className="size-4 accent-primary"
+                    checked={settings.tlsSkipVerify}
+                    onChange={(e) => update({ tlsSkipVerify: e.target.checked })}
+                  />
+                  <Hint content={<><b>Не проверять TLS-сертификат.</b> Отключает проверку сертификата при HTTPS-запросах. Нужно, если прокси или сеть подменяют сертификаты (иначе проверка падает с ошибкой TLS). Включайте осознанно — снижает безопасность.</>}>
+                    Не проверять TLS-сертификат (небезопасно)
+                  </Hint>
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
                     checked={settings.speedTest}
                     onChange={(e) => update({ speedTest: e.target.checked })}
                   />

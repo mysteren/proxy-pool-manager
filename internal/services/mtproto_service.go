@@ -310,7 +310,10 @@ func (s *MTProtoService) runGeo(ctx context.Context, total int) {
 		s.geoMu.Unlock()
 	}()
 
-	client := &http.Client{Timeout: 8 * time.Second}
+	client := &http.Client{
+		Timeout:   8 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: testTLSConfig(tlsSkipVerify(s.settings))},
+	}
 	completed, resolved := 0, 0
 	last := time.Time{}
 	ttl, _ := s.settings.geoCacheTTL()

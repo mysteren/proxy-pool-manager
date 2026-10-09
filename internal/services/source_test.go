@@ -18,7 +18,7 @@ func newTestSourceService(t *testing.T) (*SourceService, *StorageService) {
 	}
 	t.Cleanup(func() { conn.Close() })
 	storage := NewStorageService(conn)
-	return NewSourceService(storage), storage
+	return NewSourceService(storage, NewSettingsService(storage)), storage
 }
 
 func TestAddFromURL(t *testing.T) {

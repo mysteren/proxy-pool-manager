@@ -87,6 +87,7 @@ CREATE TABLE settings (
 | `geo_consensus`           | `true`                               |
 | `geo_cache_ttl_days`      | `30`                                 |
 | `speed_samples`           | `1`                                  |
+| `tls_skip_verify`         | `false`                              |
 
 ## Go-модели
 

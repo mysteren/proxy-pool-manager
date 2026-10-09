@@ -20,6 +20,7 @@ const (
 	keyGeoConsensus       = "geo_consensus"
 	keyGeoCacheTTLDays    = "geo_cache_ttl_days"
 	keySpeedSamples       = "speed_samples"
+	keyTLSSkipVerify      = "tls_skip_verify"
 )
 
 // Settings — пользовательские настройки приложения (camelCase для фронтенда).
@@ -41,6 +42,8 @@ type Settings struct {
 	GeoCacheTTLDays int `json:"geoCacheTtlDays"`
 	// SpeedSamples — сколько замеров скорости делать (1..3).
 	SpeedSamples int `json:"speedSamples"`
+	// TLSSkipVerify отключает проверку TLS-сертификата при проверках (небезопасно).
+	TLSSkipVerify bool `json:"tlsSkipVerify"`
 }
 
 // DefaultSettings — значения по умолчанию (см. docs/DATA_MODEL.md).
@@ -58,6 +61,7 @@ func DefaultSettings() Settings {
 		GeoConsensus:       true,
 		GeoCacheTTLDays:    30,
 		SpeedSamples:       1,
+		TLSSkipVerify:      false,
 	}
 }
 
@@ -136,6 +140,9 @@ func settingsFromMap(values map[string]string) Settings {
 			d.SpeedSamples = n
 		}
 	}
+	if v, ok := values[keyTLSSkipVerify]; ok {
+		d.TLSSkipVerify = v != "false" && v != "0"
+	}
 	return clampSettings(d)
 }
 
@@ -213,6 +220,7 @@ func (s *SettingsService) persist(in Settings) error {
 		keyGeoConsensus:       strconv.FormatBool(in.GeoConsensus),
 		keyGeoCacheTTLDays:    strconv.Itoa(in.GeoCacheTTLDays),
 		keySpeedSamples:       strconv.Itoa(in.SpeedSamples),
+		keyTLSSkipVerify:      strconv.FormatBool(in.TLSSkipVerify),
 	}
 	for key, value := range pairs {
 		if err := s.storage.SetSetting(key, value); err != nil {

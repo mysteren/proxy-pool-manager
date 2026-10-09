@@ -62,6 +62,11 @@ export interface Settings {
      * SpeedSamples — сколько замеров скорости делать (1..3).
      */
     "speedSamples": number;
+
+    /**
+     * TLSSkipVerify отключает проверку TLS-сертификата при проверках (небезопасно).
+     */
+    "tlsSkipVerify": boolean;
 }
 
 /**

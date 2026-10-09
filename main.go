@@ -40,7 +40,7 @@ func main() {
 	storage := services.NewStorageService(database)
 	settings := services.NewSettingsService(storage)
 	themeService := services.NewThemeService()
-	sourceService := services.NewSourceService(storage)
+	sourceService := services.NewSourceService(storage, settings)
 	proxyService := services.NewProxyService(storage, settings)
 	testerService := services.NewTesterService(storage, settings)
 	mtprotoService := services.NewMTProtoService(storage, settings)

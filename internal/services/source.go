@@ -33,15 +33,12 @@ type FetchResult struct {
 
 // SourceService загружает списки прокси из URL, файлов и ручного ввода.
 type SourceService struct {
-	storage *StorageService
-	client  *http.Client
+	storage  *StorageService
+	settings *SettingsService
 }
 
-func NewSourceService(storage *StorageService) *SourceService {
-	return &SourceService{
-		storage: storage,
-		client:  &http.Client{Timeout: 15 * time.Second},
-	}
+func NewSourceService(storage *StorageService, settings *SettingsService) *SourceService {
+	return &SourceService{storage: storage, settings: settings}
 }
 
 // AddFromURL загружает прокси по URL. Повторный URL обновляет существующий источник.
@@ -172,7 +169,11 @@ func (s *SourceService) PickProxyFile() (string, error) {
 }
 
 func (s *SourceService) fetchURL(rawURL string) ([]byte, string, error) {
-	resp, err := s.client.Get(rawURL)
+	client := &http.Client{
+		Timeout:   15 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: testTLSConfig(tlsSkipVerify(s.settings))},
+	}
+	resp, err := client.Get(rawURL)
 	if err != nil {
 		return nil, "", err
 	}

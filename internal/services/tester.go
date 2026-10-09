@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -124,6 +125,7 @@ type testConfig struct {
 	validateViaHTTP bool
 	validationURL   string
 	geoConsensus    bool
+	tlsSkipVerify   bool
 	speedBytes      int
 	speedSamples    int
 	speedURL        string
@@ -194,7 +196,10 @@ func (s *TesterService) TestUnchecked() error {
 func (s *TesterService) GetMyLocation() (MyLocation, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
-	client := &http.Client{Timeout: 8 * time.Second}
+	client := &http.Client{
+		Timeout:   8 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: testTLSConfig(tlsSkipVerify(s.settings))},
+	}
 
 	merged, ok := runGeoProviders(ctx, geoProxyProviders, func(ctx context.Context, url string) (validationInfo, error) {
 		return fetchGeoDirect(ctx, client, url)
@@ -400,6 +405,7 @@ func (s *TesterService) testConfig() (testConfig, error) {
 		validateViaHTTP: st.ValidateViaHTTP,
 		validationURL:   st.HTTPValidationURL,
 		geoConsensus:    st.GeoConsensus,
+		tlsSkipVerify:   st.TLSSkipVerify,
 		speedBytes:      st.SpeedDownloadBytes,
 		speedSamples:    st.SpeedSamples,
 		speedURL:        fmt.Sprintf(cloudflareSpeedURLFormat, st.SpeedDownloadBytes),
@@ -482,7 +488,7 @@ func (s *TesterService) measureSpeed(ctx context.Context, p models.Proxy, cfg te
 		url = fmt.Sprintf(cloudflareSpeedURLFormat, bytes)
 	}
 
-	transport, err := proxyTransport(p.Protocol, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)), timeout)
+	transport, err := proxyTransport(p.Protocol, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)), timeout, cfg.tlsSkipVerify)
 	if err != nil {
 		return nil, err
 	}
@@ -610,7 +616,7 @@ func hasProviderURL(list []geoProvider, url string) bool {
 func (s *TesterService) validateHTTP(ctx context.Context, p models.Proxy, cfg testConfig, timeout time.Duration) (validationInfo, error) {
 	addr := net.JoinHostPort(p.Host, strconv.Itoa(p.Port))
 	merged, ok := runGeoProviders(ctx, proxyGeoProviders(cfg), func(ctx context.Context, url string) (validationInfo, error) {
-		return fetchGeoThroughProxy(ctx, p.Protocol, addr, url, timeout)
+		return fetchGeoThroughProxy(ctx, p.Protocol, addr, url, timeout, cfg.tlsSkipVerify)
 	}, geoQuorum)
 	if !ok {
 		return validationInfo{}, fmt.Errorf("прокси не ответил ни на один источник")
@@ -618,8 +624,8 @@ func (s *TesterService) validateHTTP(ctx context.Context, p models.Proxy, cfg te
 	return merged, nil
 }
 
-func fetchGeoThroughProxy(ctx context.Context, protocol, addr, target string, timeout time.Duration) (validationInfo, error) {
-	transport, err := proxyTransport(protocol, addr, timeout)
+func fetchGeoThroughProxy(ctx context.Context, protocol, addr, target string, timeout time.Duration, insecure bool) (validationInfo, error) {
+	transport, err := proxyTransport(protocol, addr, timeout, insecure)
 	if err != nil {
 		return validationInfo{}, err
 	}
@@ -880,17 +886,38 @@ func geoCacheStore(storage *StorageService, ip string, info validationInfo) {
 	_ = storage.PutGeoCache(ip, info)
 }
 
-func proxyTransport(protocol, addr string, timeout time.Duration) (*http.Transport, error) {
+func proxyTransport(protocol, addr string, timeout time.Duration, insecure bool) (*http.Transport, error) {
+	tlsCfg := testTLSConfig(insecure)
 	switch protocol {
 	case "socks5":
 		dialer, err := proxy.SOCKS5("tcp", addr, nil, &net.Dialer{Timeout: timeout})
 		if err != nil {
 			return nil, err
 		}
-		return &http.Transport{DialContext: contextDialFunc(dialer)}, nil
+		return &http.Transport{DialContext: contextDialFunc(dialer), TLSClientConfig: tlsCfg}, nil
 	default: // http
-		return &http.Transport{Proxy: http.ProxyURL(&url.URL{Scheme: "http", Host: addr})}, nil
+		return &http.Transport{Proxy: http.ProxyURL(&url.URL{Scheme: "http", Host: addr}), TLSClientConfig: tlsCfg}, nil
 	}
+}
+
+// testTLSConfig возвращает TLS-конфиг для проверок. При insecure=true проверка
+// сертификата отключается (настройка tls_skip_verify): часть прокси и сетей
+// подменяет сертификаты, и без этого проверка всегда падала бы с ошибкой TLS.
+func testTLSConfig(insecure bool) *tls.Config {
+	if !insecure {
+		return nil
+	}
+	// #nosec G402 — осознанное отключение по явной настройке пользователя.
+	return &tls.Config{InsecureSkipVerify: true}
+}
+
+// tlsSkipVerify читает настройку отключения проверки TLS.
+func tlsSkipVerify(settings *SettingsService) bool {
+	st, err := settings.Get()
+	if err != nil {
+		return false
+	}
+	return st.TLSSkipVerify
 }
 
 // contextDialFunc превращает proxy.Dialer в функцию с поддержкой context.
