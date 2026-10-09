@@ -1,0 +1,92 @@
+name: Release
+
+# Запускается при пуше тега вида v0.2.0. Собирает пакеты для Linux, Windows и
+# macOS и прикрепляет их к GitHub Release с этим тегом.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux packages
+    runs-on: ubuntu-24.04
+    env:
+      # linuxdeploy (AppImage) запускается без FUSE на раннерах.
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Системные зависимости
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev nsis
+      - name: Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.27
+      - name: Сборка пакетов (deb, rpm, AppImage, Arch)
+        run: wails3 package
+      - name: Список артефактов
+        run: ls -la bin
+      - name: Публикация релиза
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bin/*.deb
+            bin/*.rpm
+            bin/*.AppImage
+            bin/*.pkg.tar.zst
+
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Установка NSIS
+        run: choco install nsis --no-progress -y
+      - name: Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.27
+      - name: Сборка установщика (NSIS)
+        run: wails3 task windows:package
+      - name: Публикация релиза
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/windows/nsis/proxy-pool-manager-installer.exe
+
+  macos:
+    name: macOS dmg
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.27
+      - name: Сборка .app (universal) и .dmg
+        run: |
+          wails3 task darwin:package:universal
+          wails3 task darwin:create:dmg
+      - name: Публикация релиза
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/*.dmg

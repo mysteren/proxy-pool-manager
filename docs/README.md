@@ -49,6 +49,7 @@ wails3 build
 - [UI_GUIDELINES.md](UI_GUIDELINES.md) — правила интерфейса
 - [TESTING_STRATEGY.md](TESTING_STRATEGY.md) — стратегия тестирования
 - [BUILD.md](BUILD.md) — сборка и упаковка для Linux/Windows/macOS
+- [RELEASE.md](RELEASE.md) — выпуск версии и публикация на GitHub
 - [ROADMAP.md](ROADMAP.md) — этапы разработки
 - [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) — работа с агентом через Zed
 
