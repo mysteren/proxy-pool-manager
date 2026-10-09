@@ -12,6 +12,8 @@ import type * as services$0 from "../../../../../proxy-pool-manager/internal/ser
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "geo:completed": services$0.TestCompleted;
+            "geo:progress": services$0.TestProgress;
             "source:fetched": services$0.FetchResult;
             "test:completed": services$0.TestCompleted;
             "test:progress": services$0.TestProgress;

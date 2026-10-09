@@ -43,6 +43,11 @@ export interface MTProtoProxy {
     "attempts": number;
     "score"?: number | null;
     "method"?: string;
+    "country"?: string | null;
+    "city"?: string | null;
+    "latitude"?: number | null;
+    "longitude"?: number | null;
+    "serverIp"?: string | null;
     "isWorking": boolean;
     "lastChecked"?: string | null;
     "sourceId"?: number | null;

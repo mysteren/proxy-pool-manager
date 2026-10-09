@@ -9,7 +9,7 @@ import (
 )
 
 const mtprotoColumns = `SELECT id, host, port, secret, tg_type, ping_ms, jitter_ms, successes, attempts, score,
-	method, is_working, last_checked, source_id
+	method, country, city, latitude, longitude, server_ip, is_working, last_checked, source_id
 	FROM mtproto_proxies`
 
 // InsertMTProto вставляет Telegram-прокси одной транзакцией.
@@ -84,6 +84,8 @@ var mtprotoSortColumns = map[string]string{
 	"success":     "successes",
 	"host":        "host",
 	"port":        "port",
+	"country":     "country",
+	"city":        "city",
 	"lastChecked": "last_checked",
 	"id":          "id",
 }
@@ -112,12 +114,18 @@ func scanMTProtoRows(rows *sql.Rows) ([]models.MTProtoProxy, error) {
 			jitter    sql.NullInt64
 			score     sql.NullFloat64
 			method    sql.NullString
+			country   sql.NullString
+			city      sql.NullString
+			latitude  sql.NullFloat64
+			longitude sql.NullFloat64
+			serverIP  sql.NullString
 			lastStr   sql.NullString
 			isWorking int
 			sourceID  sql.NullInt64
 		)
 		if err := rows.Scan(&p.ID, &p.Host, &p.Port, &p.Secret, &p.Type, &ping, &jitter,
-			&p.Successes, &p.Attempts, &score, &method, &isWorking, &lastStr, &sourceID); err != nil {
+			&p.Successes, &p.Attempts, &score, &method, &country, &city, &latitude, &longitude,
+			&serverIP, &isWorking, &lastStr, &sourceID); err != nil {
 			return nil, err
 		}
 		if ping.Valid {
@@ -134,6 +142,23 @@ func scanMTProtoRows(rows *sql.Rows) ([]models.MTProtoProxy, error) {
 		}
 		if method.Valid {
 			p.Method = method.String
+		}
+		if country.Valid {
+			p.Country = &country.String
+		}
+		if city.Valid {
+			p.City = &city.String
+		}
+		if latitude.Valid {
+			v := latitude.Float64
+			p.Latitude = &v
+		}
+		if longitude.Valid {
+			v := longitude.Float64
+			p.Longitude = &v
+		}
+		if serverIP.Valid {
+			p.ServerIP = &serverIP.String
 		}
 		p.IsWorking = isWorking != 0
 		p.LastChecked = parseTimeString(lastStr)
@@ -324,4 +349,60 @@ func (s *StorageService) ClearMTProtoStatusByIDs(ids []int64) (int, error) {
 		total += int(n)
 	}
 	return total, nil
+}
+
+// UpdateMTProtoGeo сохраняет IP сервера и гео Telegram-прокси по нему.
+func (s *StorageService) UpdateMTProtoGeo(id int64, serverIP string, info validationInfo) error {
+	_, err := s.db.Exec(`UPDATE mtproto_proxies
+		SET server_ip = ?, country = ?, city = ?, latitude = ?, longitude = ?
+		WHERE id = ?`,
+		strOrNil(serverIP), strOrNil(info.country), strOrNil(info.city), info.latitude, info.longitude, id)
+	return err
+}
+
+// CountMTProtoMissingGeo возвращает число прокси без определённого гео.
+func (s *StorageService) CountMTProtoMissingGeo() (int, error) {
+	var n int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM mtproto_proxies WHERE country IS NULL AND latitude IS NULL").Scan(&n)
+	return n, err
+}
+
+// ForEachMTProtoMissingGeo пролистывает прокси без гео (keyset по id).
+func (s *StorageService) ForEachMTProtoMissingGeo(ctx context.Context, fn func(models.MTProtoProxy) bool) error {
+	lastID := int64(0)
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		query := mtprotoColumns + " WHERE country IS NULL AND latitude IS NULL"
+		args := []any{}
+		if lastID > 0 {
+			query += " AND id > ?"
+			args = append(args, lastID)
+		}
+		query += " ORDER BY id ASC LIMIT ?"
+		args = append(args, 500)
+
+		list, err := s.queryMTProto(query, args...)
+		if err != nil {
+			return err
+		}
+		if len(list) == 0 {
+			return nil
+		}
+		for _, p := range list {
+			if !fn(p) {
+				return nil
+			}
+		}
+		lastID = list[len(list)-1].ID
+	}
+}
+
+// strOrNil превращает пустую строку в NULL для записи в БД.
+func strOrNil(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

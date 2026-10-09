@@ -211,6 +211,57 @@ func fetchGeoDirect(ctx context.Context, client *http.Client, target string) (va
 	return parseGeo(body), nil
 }
 
+// geoByIPURLs — источники гео для запроса ПО IP (без прокси). %s — сам IP.
+// Нужны для MTProto: через такой прокси HTTP-запрос не провести, поэтому гео
+// определяем по IP сервера.
+var geoByIPURLs = []string{
+	"https://ipwho.is/%s",
+	"http://ip-api.com/json/%s?fields=status,country,countryCode,city,lat,lon,query",
+	"https://ipinfo.io/%s/json",
+}
+
+// lookupGeoByIP определяет гео по IP через несколько источников (консенсус).
+func lookupGeoByIP(ctx context.Context, client *http.Client, ip string) (validationInfo, bool) {
+	results := make([]geoResponse, len(geoByIPURLs))
+	var wg sync.WaitGroup
+	for i, tmpl := range geoByIPURLs {
+		wg.Add(1)
+		go func(i int, target string) {
+			defer wg.Done()
+			info, err := fetchGeoDirect(ctx, client, target)
+			results[i] = geoResponse{info: info, ok: err == nil}
+		}(i, fmt.Sprintf(tmpl, ip))
+	}
+	wg.Wait()
+	return consensusGeo(results)
+}
+
+// resolveServerIP возвращает IP сервера прокси (из кэша или через DNS),
+// предпочитая IPv4.
+func resolveServerIP(ctx context.Context, p models.MTProtoProxy) string {
+	if p.ServerIP != nil && *p.ServerIP != "" {
+		return *p.ServerIP
+	}
+	if ip := net.ParseIP(p.Host); ip != nil {
+		return ip.String()
+	}
+	lookupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupHost(lookupCtx, p.Host)
+	if err != nil {
+		return ""
+	}
+	for _, a := range addrs {
+		if ip := net.ParseIP(a); ip != nil && ip.To4() != nil {
+			return a
+		}
+	}
+	if len(addrs) > 0 {
+		return addrs[0]
+	}
+	return ""
+}
+
 // Cancel останавливает активную массовую проверку.
 func (s *TesterService) Cancel() {
 	s.mu.Lock()
@@ -740,5 +791,17 @@ func emitTestProgress(p TestProgress) {
 func emitTestCompleted(c TestCompleted) {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("test:completed", c)
+	}
+}
+
+func emitGeoProgress(p TestProgress) {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("geo:progress", p)
+	}
+}
+
+func emitGeoCompleted(c TestCompleted) {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("geo:completed", c)
 	}
 }

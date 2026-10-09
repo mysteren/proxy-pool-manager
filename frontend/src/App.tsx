@@ -10,6 +10,7 @@ import { SettingsPage } from "@/pages/Settings";
 import { useThemeStore } from "@/stores/themeStore";
 import { useUiStore } from "@/stores/uiStore";
 import { useTestStore } from "@/stores/testStore";
+import { useGeoStore } from "@/stores/geoStore";
 import { toast } from "@/stores/toastStore";
 import { ThemeService } from "../bindings/proxy-pool-manager/internal/services";
 
@@ -18,6 +19,8 @@ export default function App() {
   const setSystemTheme = useThemeStore((s) => s.setSystemTheme);
   const testProgress = useTestStore((s) => s.progress);
   const testFinish = useTestStore((s) => s.finish);
+  const geoProgress = useGeoStore((s) => s.progress);
+  const geoFinish = useGeoStore((s) => s.finish);
 
   useEffect(() => {
     ThemeService.GetSystemTheme()
@@ -50,12 +53,36 @@ export default function App() {
       }
     });
 
+    const offGeoProgress = Events.On("geo:progress", (event) => {
+      geoProgress({
+        total: event.data.total,
+        completed: event.data.completed,
+        current: event.data.current,
+      });
+    });
+
+    const offGeoCompleted = Events.On("geo:completed", (event) => {
+      const result = event.data;
+      geoFinish({
+        cancelled: result.cancelled,
+        tested: result.tested,
+        working: result.working,
+      });
+      if (result.cancelled) {
+        toast.info("Определение гео отменено");
+      } else {
+        toast.success(`Гео определено: ${result.working} из ${result.tested}`);
+      }
+    });
+
     return () => {
       offTheme();
       offProgress();
       offCompleted();
+      offGeoProgress();
+      offGeoCompleted();
     };
-  }, [setSystemTheme, testProgress, testFinish]);
+  }, [setSystemTheme, testProgress, testFinish, geoProgress, geoFinish]);
 
   return (
     <>

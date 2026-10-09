@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Download, Eraser, Loader2, Play, RefreshCw, Trash2 } from "lucide-react";
+import { Copy, Download, Eraser, Globe, Loader2, Play, RefreshCw, Trash2 } from "lucide-react";
 
+import { GeoProgressBar } from "@/components/GeoProgressBar";
 import { TestProgressBar } from "@/components/TestProgressBar";
 import { Badge } from "@/components/ui/badge";
 import { Hint } from "@/components/ui/hint";
@@ -9,9 +10,11 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatRelative } from "@/lib/time";
 import { formatLatency, latencyVariant } from "@/lib/proxy";
+import { countryFlag, countryName, formatDistance, haversineKm } from "@/lib/geo";
 import { toast } from "@/stores/toastStore";
 import { useTestStore } from "@/stores/testStore";
-import { MTProtoService } from "../../bindings/proxy-pool-manager/internal/services";
+import { useGeoStore } from "@/stores/geoStore";
+import { MTProtoService, TesterService, type MyLocation } from "../../bindings/proxy-pool-manager/internal/services";
 import { MTProtoFilter, MTProtoProxy } from "../../bindings/proxy-pool-manager/internal/models";
 
 type Status = "all" | "working" | "broken" | "unchecked";
@@ -47,11 +50,22 @@ export function MTProtoPage() {
   const [checking, setChecking] = useState<Set<number>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
   const [exportFormat, setExportFormat] = useState("txt");
+  const [myLocation, setMyLocation] = useState<MyLocation | null>(null);
 
   const running = useTestStore((s) => s.running);
   const refreshToken = useTestStore((s) => s.refreshToken);
   const startTest = useTestStore((s) => s.start);
   const resetTest = useTestStore((s) => s.reset);
+
+  const geoRunning = useGeoStore((s) => s.running);
+  const startGeo = useGeoStore((s) => s.start);
+  const resetGeo = useGeoStore((s) => s.reset);
+
+  useEffect(() => {
+    TesterService.GetMyLocation()
+      .then((loc) => setMyLocation(loc))
+      .catch(() => setMyLocation(null));
+  }, []);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search), 300);
@@ -198,6 +212,17 @@ export function MTProtoPage() {
     }
   };
 
+  const startGeoLookup = async () => {
+    startGeo();
+    try {
+      await MTProtoService.LookupGeo();
+      toast.info("Определение гео запущено");
+    } catch (err) {
+      resetGeo();
+      toast.error(String(err));
+    }
+  };
+
   const handleTestOne = async (id: number) => {
     setChecking((prev) => new Set(prev).add(id));
     try {
@@ -314,6 +339,13 @@ export function MTProtoPage() {
     }
   };
 
+  const distanceFor = (p: MTProtoProxy): number | null => {
+    if (!myLocation?.latitude || !myLocation?.longitude || p.latitude == null || p.longitude == null) {
+      return null;
+    }
+    return haversineKm(myLocation.latitude, myLocation.longitude, p.latitude, p.longitude);
+  };
+
   const sortIndicator = (column: string) =>
     sortBy === column ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
@@ -426,6 +458,17 @@ export function MTProtoPage() {
                 Проверить всё
               </Button>
             </Hint>
+            <Hint plain focusable={false} content={<><b>Определить гео.</b> Определить страну/город и координаты прокси по IP сервера (через MTProto HTTP-запрос не провести). Идёт в фоне с ограничением частоты запросов к гео-сервисам.</>}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={startGeoLookup}
+                disabled={running || geoRunning}
+              >
+                <Globe className="size-3.5" />
+                Определить гео
+              </Button>
+            </Hint>
             <Button
               size="sm"
               variant="ghost"
@@ -493,6 +536,7 @@ export function MTProtoPage() {
       </div>
 
       <TestProgressBar onCancel={() => void MTProtoService.Cancel()} />
+      <GeoProgressBar onCancel={() => void MTProtoService.CancelGeo()} />
 
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse text-sm">
@@ -514,6 +558,17 @@ export function MTProtoPage() {
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("port")}>
                 <Hint content={<><b>Порт</b> — TCP-порт прокси, обычно 443.</>}>Порт</Hint>
                 {sortIndicator("port")}
+              </th>
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("country")}>
+                <Hint content={<><b>Страна</b> — страна сервера прокси, определённая по его IP (через MTProto HTTP-запрос не провести).</>}>Страна</Hint>
+                {sortIndicator("country")}
+              </th>
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("city")}>
+                <Hint content={<><b>Город</b> — город сервера прокси по его IP, если гео-источник его сообщил.</>}>Город</Hint>
+                {sortIndicator("city")}
+              </th>
+              <th className="px-4 py-2 font-medium">
+                <Hint content={<><b>Расстояние</b> — расстояние по прямой от вас до сервера прокси (по координатам обоих). Приблизительное. Появляется после «Определить гео».</>}>Расстояние</Hint>
               </th>
               <th className="px-4 py-2 font-medium">
                 <Hint content={<><b>Тип</b> — MTProto — собственный прокси Telegram (маскировка FakeTLS/obfuscated); SOCKS — SOCKS5-прокси, поддерживающий MTProto.</>}>Тип</Hint>
@@ -550,13 +605,13 @@ export function MTProtoPage() {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={15} className="px-4 py-8 text-center text-muted-foreground">
                   Загрузка…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={15} className="px-4 py-8 text-center text-muted-foreground">
                   Telegram-прокси не найдены. Добавьте источник на странице «Источники».
                 </td>
               </tr>
@@ -574,6 +629,14 @@ export function MTProtoPage() {
                   <td className="px-4 py-2" />
                   <td className="px-4 py-2 font-mono">{p.host}</td>
                   <td className="px-4 py-2 font-mono">{p.port}</td>
+                  <td
+                    className="px-4 py-2"
+                    title={p.serverIp ? `${p.serverIp} · ${countryName(p.country)}` : countryName(p.country)}
+                  >
+                    {countryFlag(p.country)} {p.country ?? "—"}
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground">{p.city ?? "—"}</td>
+                  <td className="px-4 py-2 text-muted-foreground">{formatDistance(distanceFor(p))}</td>
                   <td className="px-4 py-2">
                     <Badge variant={p.type === "socks" ? "socks5" : "telegram"}>{p.type}</Badge>
                   </td>

@@ -69,6 +69,11 @@ type MTProtoProxy struct {
 	Attempts    int        `json:"attempts"`
 	Score       *float64   `json:"score,omitempty"`
 	Method      string     `json:"method,omitempty"`
+	Country     *string    `json:"country,omitempty"`
+	City        *string    `json:"city,omitempty"`
+	Latitude    *float64   `json:"latitude,omitempty"`
+	Longitude   *float64   `json:"longitude,omitempty"`
+	ServerIP    *string    `json:"serverIp,omitempty"`
 	IsWorking   bool       `json:"isWorking"`
 	LastChecked *time.Time `json:"lastChecked,omitempty"`
 	SourceID    *int64     `json:"sourceId,omitempty"`

@@ -26,6 +26,8 @@ func init() {
 	application.RegisterEvent[services.FetchResult]("source:fetched")
 	application.RegisterEvent[services.TestProgress]("test:progress")
 	application.RegisterEvent[services.TestCompleted]("test:completed")
+	application.RegisterEvent[services.TestProgress]("geo:progress")
+	application.RegisterEvent[services.TestCompleted]("geo:completed")
 }
 
 func main() {

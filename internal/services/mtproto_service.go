@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -36,6 +37,10 @@ type MTProtoResult struct {
 // mtprotoAttempts — сколько раз проверяем каждый прокси (для оценки надёжности и джиттера).
 const mtprotoAttempts = 3
 
+// geoLookupInterval — пауза между запросами к гео-сервисам, чтобы не превышать
+// бесплатные лимиты (у ip-api — 45 запросов/мин с одного IP).
+const geoLookupInterval = 1500 * time.Millisecond
+
 // MTProtoService — список, проверка, копирование и экспорт Telegram-прокси.
 type MTProtoService struct {
 	storage  *StorageService
@@ -44,6 +49,10 @@ type MTProtoService struct {
 	mu      sync.Mutex
 	cancel  context.CancelFunc
 	running bool
+
+	geoMu      sync.Mutex
+	geoCancel  context.CancelFunc
+	geoRunning bool
 }
 
 func NewMTProtoService(storage *StorageService, settings *SettingsService) *MTProtoService {
@@ -257,6 +266,81 @@ func (s *MTProtoService) Cancel() {
 	if cancel != nil {
 		cancel()
 	}
+}
+
+// LookupGeo определяет страну/город/координаты Telegram-прокси по IP сервера.
+// Идёт фоном с ограничением частоты запросов к гео-сервисам.
+func (s *MTProtoService) LookupGeo() error {
+	total, err := s.storage.CountMTProtoMissingGeo()
+	if err != nil {
+		return err
+	}
+	if total == 0 {
+		return fmt.Errorf("нет прокси без гео")
+	}
+	s.geoMu.Lock()
+	if s.geoRunning {
+		s.geoMu.Unlock()
+		return fmt.Errorf("определение гео уже выполняется")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.geoCancel = cancel
+	s.geoRunning = true
+	s.geoMu.Unlock()
+
+	go s.runGeo(ctx, total)
+	return nil
+}
+
+// CancelGeo останавливает определение гео.
+func (s *MTProtoService) CancelGeo() {
+	s.geoMu.Lock()
+	cancel := s.geoCancel
+	s.geoMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func (s *MTProtoService) runGeo(ctx context.Context, total int) {
+	defer func() {
+		s.geoMu.Lock()
+		s.geoRunning = false
+		s.geoCancel = nil
+		s.geoMu.Unlock()
+	}()
+
+	client := &http.Client{Timeout: 8 * time.Second}
+	completed, resolved := 0, 0
+	last := time.Time{}
+
+	_ = s.storage.ForEachMTProtoMissingGeo(ctx, func(p models.MTProtoProxy) bool {
+		if ctx.Err() != nil {
+			return false
+		}
+		// Троттлинг: бережём бесплатные лимиты гео-API.
+		if wait := geoLookupInterval - time.Since(last); wait > 0 {
+			select {
+			case <-ctx.Done():
+				return false
+			case <-time.After(wait):
+			}
+		}
+		last = time.Now()
+
+		if ip := resolveServerIP(ctx, p); ip != "" {
+			if info, ok := lookupGeoByIP(ctx, client, ip); ok {
+				_ = s.storage.UpdateMTProtoGeo(p.ID, ip, info)
+				resolved++
+			}
+		}
+		completed++
+		emitGeoProgress(TestProgress{Total: total, Completed: completed, Current: net.JoinHostPort(p.Host, strconv.Itoa(p.Port))})
+		return true
+	})
+
+	emitGeoProgress(TestProgress{Total: total, Completed: completed})
+	emitGeoCompleted(TestCompleted{Cancelled: ctx.Err() != nil, Tested: completed, Working: resolved})
 }
 
 func (s *MTProtoService) startFilterBatch(f models.MTProtoFilter) error {

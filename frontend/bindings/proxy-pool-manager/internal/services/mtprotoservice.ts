@@ -22,6 +22,13 @@ export function Cancel(): $CancellablePromise<void> {
 }
 
 /**
+ * CancelGeo останавливает определение гео.
+ */
+export function CancelGeo(): $CancellablePromise<void> {
+    return $Call.ByID(3268440978);
+}
+
+/**
  * ClearStatus сбрасывает статус проверки под фильтр.
  */
 export function ClearStatus(f: models$0.MTProtoFilter): $CancellablePromise<number> {
@@ -82,6 +89,14 @@ export function ExportByIDs(ids: number[] | null, format: string, path: string):
  */
 export function GetProxies(f: models$0.MTProtoFilter): $CancellablePromise<models$0.MTProtoProxy[] | null> {
     return $Call.ByID(631339699, f);
+}
+
+/**
+ * LookupGeo определяет страну/город/координаты Telegram-прокси по IP сервера.
+ * Идёт фоном с ограничением частоты запросов к гео-сервисам.
+ */
+export function LookupGeo(): $CancellablePromise<void> {
+    return $Call.ByID(4111407594);
 }
 
 /**
