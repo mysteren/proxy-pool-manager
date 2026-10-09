@@ -61,6 +61,7 @@ export function ProxiesPage() {
   const progressCurrent = useTestStore((s) => s.current);
   const refreshToken = useTestStore((s) => s.refreshToken);
   const startTest = useTestStore((s) => s.start);
+  const resetTest = useTestStore((s) => s.reset);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search), 300);
@@ -104,28 +105,42 @@ export function ProxiesPage() {
     [status, noSource, protocol, maxLatency, debouncedSearch, sortBy, sortDir, pageSize],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const filter = buildFilter(page * pageSize);
-      const [list, count, workingCount] = await Promise.all([
-        ProxyService.GetProxies(filter),
-        ProxyService.CountProxies(filter),
-        ProxyService.CountProxies({ ...filter, onlyWorking: true, unchecked: null, limit: 0, offset: 0 }),
-      ]);
-      setRows(list ?? []);
-      setTotal(count);
-      setWorkingTotal(workingCount);
-    } catch (err) {
-      toast.error(`Не удалось загрузить пул: ${String(err)}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [buildFilter, page, pageSize]);
+  const load = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+      try {
+        const filter = buildFilter(page * pageSize);
+        const [list, count, workingCount] = await Promise.all([
+          ProxyService.GetProxies(filter),
+          ProxyService.CountProxies(filter),
+          ProxyService.CountProxies({ ...filter, onlyWorking: true, unchecked: null, limit: 0, offset: 0 }),
+        ]);
+        setRows(list ?? []);
+        setTotal(count);
+        setWorkingTotal(workingCount);
+      } catch (err) {
+        if (!silent) toast.error(`Не удалось загрузить пул: ${String(err)}`);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [buildFilter, page, pageSize],
+  );
 
   useEffect(() => {
     void load();
   }, [load, refreshToken]);
+
+  // Статусы сохраняются в БД по мере проверки каждого прокси, а не в конце
+  // прогона. Поэтому во время массовой проверки периодически подтягиваем
+  // текущую страницу — результат появляется сразу, без ожидания конца обхода.
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => {
+      void load(true);
+    }, 800);
+    return () => clearInterval(id);
+  }, [running, load]);
 
   const pageIds = useMemo(() => rows.map((r) => r.id), [rows]);
   const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
@@ -188,6 +203,7 @@ export function ProxiesPage() {
       await action();
       toast.info(message);
     } catch (err) {
+      resetTest();
       toast.error(String(err));
     }
   };

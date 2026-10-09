@@ -23,6 +23,8 @@ interface TestState {
   start: () => void;
   progress: (data: TestProgressData) => void;
   finish: (data: TestCompletedData) => void;
+  /** Сброс, если запуск проверки не удался (событие test:completed не придёт). */
+  reset: () => void;
 }
 
 export const useTestStore = create<TestState>((set) => ({
@@ -43,4 +45,5 @@ export const useTestStore = create<TestState>((set) => ({
       lastResult: data,
       refreshToken: state.refreshToken + 1,
     })),
+  reset: () => set({ running: false, total: 0, completed: 0, current: "" }),
 }));
