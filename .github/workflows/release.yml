@@ -44,6 +44,12 @@ jobs:
             platform: darwin
             artifacts: |
               bin/*.dmg
+    env:
+      # Контекст `secrets` недоступен в `if`, поэтому вычисляем наличие секретов
+      # в job-level env и проверяем env.HAS_* в условиях шагов.
+      HAS_WIN_CERT: ${{ secrets.WIN_CERT_PFX_BASE64 != '' }}
+      HAS_MACOS_CERT: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
+      HAS_APPLE_ID: ${{ secrets.APPLE_ID != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -104,7 +110,7 @@ jobs:
         run: Compress-Archive -Path bin/proxy-pool-manager.exe -DestinationPath bin/proxy-pool-manager-windows-amd64.zip -Force
 
       - name: Подпись установщика (если задан сертификат)
-        if: matrix.platform == 'windows' && secrets.WIN_CERT_PFX_BASE64 != ''
+        if: matrix.platform == 'windows' && env.HAS_WIN_CERT == 'true'
         shell: pwsh
         env:
           WIN_CERT_PFX_BASE64: ${{ secrets.WIN_CERT_PFX_BASE64 }}
@@ -121,7 +127,7 @@ jobs:
       # macOS: универсальный бинарник (Intel + Apple Silicon) и .dmg. Сборка и подпись —
       # только на macOS: нотаризация Apple требует ключей и утилит, которых нет на Linux.
       - name: Импорт сертификата (macOS, если задан)
-        if: matrix.platform == 'darwin' && secrets.MACOS_CERT_P12_BASE64 != ''
+        if: matrix.platform == 'darwin' && env.HAS_MACOS_CERT == 'true'
         env:
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
@@ -139,7 +145,7 @@ jobs:
         run: wails3 task darwin:package:universal
 
       - name: Подпись .app (macOS, если задан сертификат)
-        if: matrix.platform == 'darwin' && secrets.MACOS_CERT_P12_BASE64 != ''
+        if: matrix.platform == 'darwin' && env.HAS_MACOS_CERT == 'true'
         env:
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
         run: wails3 tool sign --input "bin/proxy-pool-manager.app" --identity "$MACOS_SIGN_IDENTITY" --hardened-runtime
@@ -149,7 +155,7 @@ jobs:
         run: wails3 task darwin:create:dmg
 
       - name: Профиль нотаризации (macOS, если заданы ключи Apple)
-        if: matrix.platform == 'darwin' && secrets.APPLE_ID != ''
+        if: matrix.platform == 'darwin' && env.HAS_APPLE_ID == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -159,7 +165,7 @@ jobs:
             --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
 
       - name: Нотаризация .dmg (macOS, если заданы ключи Apple)
-        if: matrix.platform == 'darwin' && secrets.APPLE_ID != ''
+        if: matrix.platform == 'darwin' && env.HAS_APPLE_ID == 'true'
         env:
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
         run: |
