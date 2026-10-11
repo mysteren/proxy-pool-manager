@@ -1,5 +1,6 @@
 import { ListTree, Send, Rss, Settings as SettingsIcon, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { APP_VERSION } from "@/lib/version";
 import { useUiStore, type Page } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 
@@ -60,6 +61,9 @@ export function Sidebar() {
           )}
           {resolved === "dark" ? "Светлая тема" : "Тёмная тема"}
         </button>
+        <div className="mt-2 select-none px-3 text-xs text-sidebar-foreground/60">
+          Версия {APP_VERSION}
+        </div>
       </div>
     </aside>
   );
