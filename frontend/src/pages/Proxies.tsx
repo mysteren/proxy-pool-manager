@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatRelative } from "@/lib/time";
-import { formatDownload, formatLatency, latencyVariant } from "@/lib/proxy";
-import { countryFlag, countryName, formatDistance, haversineKm } from "@/lib/geo";
+import { formatDownload, formatLatency, formatQuality, latencyVariant, qualityVariant } from "@/lib/proxy";
+import { countryName, formatDistance, haversineKm } from "@/lib/geo";
+import { CountryFlag } from "@/components/CountryFlag";
 import { toast } from "@/stores/toastStore";
 import { useTestStore } from "@/stores/testStore";
 import { ProxyService, TesterService, type MyLocation } from "../../bindings/proxy-pool-manager/internal/services";
@@ -89,6 +90,8 @@ export function ProxiesPage() {
         sortDir,
         limit: pageSize,
         offset,
+        originLat: myLocation?.latitude ?? null,
+        originLon: myLocation?.longitude ?? null,
       };
       if (status === "working") {
         filter.onlyWorking = true;
@@ -100,7 +103,7 @@ export function ProxiesPage() {
       }
       return filter;
     },
-    [status, noSource, maxLatency, debouncedSearch, sortBy, sortDir, pageSize],
+    [status, noSource, maxLatency, debouncedSearch, sortBy, sortDir, pageSize, myLocation],
   );
 
   const load = useCallback(
@@ -198,7 +201,8 @@ export function ProxiesPage() {
       setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
     } else {
       setSortBy(column);
-      setSortDir("asc");
+      // Качество: удобнее сразу «лучшие сверху»; остальные — по возрастанию.
+      setSortDir(column === "quality" ? "desc" : "asc");
     }
   };
 
@@ -561,8 +565,13 @@ export function ProxiesPage() {
                 <Hint content={<><b>Скорость</b> — скорость скачивания через прокси, Мбит/с, замеряется в ходе проверки. Нулевая скорость считается нерабочим прокси.</>}>Скорость</Hint>
                 {sortIndicator("download")}
               </th>
-              <th className="px-4 py-2 font-medium">
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("distance")}>
                 <Hint content={<><b>Расстояние</b> — расстояние по прямой от вас до выходного узла (по координатам обоих). Приблизительное, зависит от точности геоданных.</>}>Расстояние</Hint>
+                {sortIndicator("distance")}
+              </th>
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("quality")}>
+                <Hint content={<><b>Качество</b> — сводная оценка 0…100: скорость (~45%), пинг (~40%) и близость к вам (~15%). Считается на лету по текущему местоположению; без пинга — прочерк.</>}>Качество</Hint>
+                {sortIndicator("quality")}
               </th>
               <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("lastChecked")}>
                 <Hint content={<><b>Проверен</b> — когда прокси последний раз проверялся. Если давно — статус может быть устаревшим.</>}>Проверен</Hint>
@@ -574,13 +583,13 @@ export function ProxiesPage() {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
                   Загрузка…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
                   Ничего не найдено.
                 </td>
               </tr>
@@ -602,7 +611,10 @@ export function ProxiesPage() {
                     className="px-4 py-2"
                     title={p.exitIp ? `${p.exitIp} · ${countryName(p.country)}` : countryName(p.country)}
                   >
-                    {countryFlag(p.country)} {p.country ?? "—"}
+                    <span className="flex items-center gap-1.5">
+                      <CountryFlag code={p.country} />
+                      {p.country ?? "—"}
+                    </span>
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">{p.city ?? "—"}</td>
                   <td className="px-4 py-2">
@@ -610,6 +622,9 @@ export function ProxiesPage() {
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">{formatDownload(p.downloadMbps)}</td>
                   <td className="px-4 py-2 text-muted-foreground">{formatDistance(distanceFor(p))}</td>
+                  <td className="px-4 py-2">
+                    <Badge variant={qualityVariant(p.quality)}>{formatQuality(p.quality)}</Badge>
+                  </td>
                   <td className="px-4 py-2 text-muted-foreground">{formatRelative(p.lastChecked)}</td>
                   <td className="px-4 py-2 text-right">
                     <Button

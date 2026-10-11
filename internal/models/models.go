@@ -18,6 +18,9 @@ type Proxy struct {
 	LastChecked  *time.Time `json:"lastChecked,omitempty"`
 	IsWorking    bool       `json:"isWorking"`
 	SourceID     *int64     `json:"sourceId,omitempty"`
+	// Quality — сводная оценка качества (0…100), вычисляется на лету при выборке
+	// (зависит от расстояния до пользователя), в БД не хранится.
+	Quality *float64 `json:"quality,omitempty"`
 }
 
 // Source — источник списка прокси (URL, файл или ручной ввод без источника).
@@ -50,10 +53,14 @@ type ProxyFilter struct {
 	MaxLatency  *int    `json:"maxLatency,omitempty"`
 	Country     *string `json:"country,omitempty"`
 	Search      *string `json:"search,omitempty"` // поиск по host
-	SortBy      string  `json:"sortBy"`           // latency|host|lastChecked
+	SortBy      string  `json:"sortBy"`           // latency|download|distance|quality|host|lastChecked
 	SortDir     string  `json:"sortDir"`          // asc|desc
 	Limit       int     `json:"limit"`
 	Offset      int     `json:"offset"`
+	// OriginLat/OriginLon — координаты пользователя (для сортировки по расстоянию
+	// и оценки качества). Если не заданы — эти сортировки недоступны.
+	OriginLat *float64 `json:"originLat,omitempty"`
+	OriginLon *float64 `json:"originLon,omitempty"`
 }
 
 // MTProtoProxy — Telegram-прокси (MTProto / tg-socks).
@@ -94,8 +101,11 @@ type MTProtoFilter struct {
 	NoSource    *bool   `json:"noSource,omitempty"`
 	Type        *string `json:"type,omitempty"` // mtproto | socks
 	Search      *string `json:"search,omitempty"`
-	SortBy      string  `json:"sortBy"` // ping|host|lastChecked
+	SortBy      string  `json:"sortBy"` // ping|host|lastChecked|distance
 	SortDir     string  `json:"sortDir"`
 	Limit       int     `json:"limit"`
 	Offset      int     `json:"offset"`
+	// OriginLat/OriginLon — координаты пользователя (для сортировки по расстоянию).
+	OriginLat *float64 `json:"originLat,omitempty"`
+	OriginLon *float64 `json:"originLon,omitempty"`
 }

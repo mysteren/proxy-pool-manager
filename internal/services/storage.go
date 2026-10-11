@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -127,14 +129,78 @@ func buildProxyWhere(f models.ProxyFilter) (string, []any) {
 	return query, args
 }
 
-func proxyOrder(f models.ProxyFilter) string {
-	column, ok := proxySortColumns[f.SortBy]
-	if !ok {
-		column = "host"
+// Параметры формулы оценки качества прокси (0…100). Каждый компонент —
+// сглаживающая дробь x/(x+K): 0 — плохо, стремится к 1 при улучшении метрики.
+//
+//	pingScore  = PING_K / (PING_K + latency_ms)   меньше пинг — лучше
+//	speedScore = mbps / (mbps + SPEED_K)          выше скорость — лучше
+//	distScore  = DIST_K2 / (DIST_K2 + d²)         ближе к пользователю — лучше
+//
+// quality = 100 · Σ(wᵢ·scoreᵢ) / Σ(wᵢ), сумма только по доступным компонентам.
+// Расстояние d — в градусах² (экваториальное приближение): для сортировки важен
+// порядок, а не километры, поэтому корень не извлекаем (без sqrt в SQL).
+const (
+	qualityPingK  = 100.0 // мс
+	qualitySpeedK = 20.0  // Мбит/с
+	qualityDistK2 = 322.8 // ≈ (2000 км / 111.32 км/градус)²
+	qualityWPing  = 0.40
+	qualityWSpeed = 0.45
+	qualityWDist  = 0.15
+)
+
+// distanceSqExpr возвращает SQL-выражение квадрата расстояния (в градусах²) от
+// точки пользователя до координат прокси. Достаточно монотонного приближения
+// (экваториальная проекция с поправкой cos(широты) пользователя).
+func distanceSqExpr(lat, lon *float64) (string, bool) {
+	if lat == nil || lon == nil {
+		return "", false
 	}
+	k := math.Cos(*lat * math.Pi / 180)
+	latS := strconv.FormatFloat(*lat, 'f', 6, 64)
+	lonS := strconv.FormatFloat(*lon, 'f', 6, 64)
+	kS := strconv.FormatFloat(k, 'f', 6, 64)
+	return fmt.Sprintf(
+		"((latitude - (%s))*(latitude - (%s)) + (%s*(longitude - (%s)))*(%s*(longitude - (%s))))",
+		latS, latS, kS, lonS, kS, lonS), true
+}
+
+// qualityExpr возвращает SQL-выражение оценки качества (0…100) или NULL, если
+// пинг неизвестен (судить не о чем). Скорость и расстояние учитываются, только
+// если соответствующие данные есть; веса нормируются по доступным компонентам.
+func qualityExpr(f models.ProxyFilter) string {
+	ping := fmt.Sprintf("%.4f*(%.4f/(%.4f + latency_ms))", qualityWPing, qualityPingK, qualityPingK)
+	wPing := fmt.Sprintf("%.4f", qualityWPing)
+	speed := fmt.Sprintf("CASE WHEN download_mbps IS NULL THEN 0 ELSE %.4f*(download_mbps/(download_mbps + %.4f)) END", qualityWSpeed, qualitySpeedK)
+	wSpeed := fmt.Sprintf("CASE WHEN download_mbps IS NULL THEN 0 ELSE %.4f END", qualityWSpeed)
+	dist, wDist := "0", "0"
+	if d, ok := distanceSqExpr(f.OriginLat, f.OriginLon); ok {
+		dist = fmt.Sprintf("CASE WHEN latitude IS NULL OR longitude IS NULL THEN 0 ELSE %.4f*(%.4f/(%.4f + %s)) END", qualityWDist, qualityDistK2, qualityDistK2, d)
+		wDist = fmt.Sprintf("CASE WHEN latitude IS NULL OR longitude IS NULL THEN 0 ELSE %.4f END", qualityWDist)
+	}
+	return fmt.Sprintf(
+		"CASE WHEN latency_ms IS NULL THEN NULL ELSE 100.0*(%s + %s + %s)/(%s + %s + %s) END",
+		ping, speed, dist, wPing, wSpeed, wDist)
+}
+
+func proxyOrder(f models.ProxyFilter) string {
 	dir := "ASC"
 	if strings.EqualFold(f.SortDir, "desc") {
 		dir = "DESC"
+	}
+	switch f.SortBy {
+	case "distance":
+		if expr, ok := distanceSqExpr(f.OriginLat, f.OriginLon); ok {
+			return fmt.Sprintf(" ORDER BY (%s) IS NULL, (%s) %s, id ASC", expr, expr, dir)
+		}
+		// Координаты пользователя неизвестны — сортировка по расстоянию недоступна.
+		return " ORDER BY host ASC, id ASC"
+	case "quality":
+		expr := qualityExpr(f)
+		return fmt.Sprintf(" ORDER BY (%s) IS NULL, (%s) %s, id ASC", expr, expr, dir)
+	}
+	column, ok := proxySortColumns[f.SortBy]
+	if !ok {
+		column = "host"
 	}
 	// Числовые метрики: строки с пустым значением всегда в конце, вторичный порядок — по id.
 	if column == "latency_ms" || column == "download_mbps" {
@@ -143,10 +209,11 @@ func proxyOrder(f models.ProxyFilter) string {
 	return fmt.Sprintf(" ORDER BY %s %s, id ASC", column, dir)
 }
 
-// GetProxies возвращает страницу пула согласно фильтру.
+// GetProxies возвращает страницу пула согласно фильтру. Оценка качества
+// (quality) вычисляется на лету и возвращается вместе со строкой.
 func (s *StorageService) GetProxies(f models.ProxyFilter) ([]models.Proxy, error) {
 	where, args := buildProxyWhere(f)
-	query := proxyColumns + where + proxyOrder(f)
+	query := "SELECT " + proxySelect + ", " + qualityExpr(f) + " AS quality FROM proxies" + where + proxyOrder(f)
 
 	limit := f.Limit
 	if limit <= 0 {
@@ -158,8 +225,15 @@ func (s *StorageService) GetProxies(f models.ProxyFilter) ([]models.Proxy, error
 	return s.queryProxies(query, args...)
 }
 
-// scanProxyRows читает строки выборки прокси.
+// scanProxyRows читает строки выборки прокси. Если в выборке есть вычисляемая
+// колонка quality (её добавляет GetProxies), она тоже прочитывается.
 func scanProxyRows(rows *sql.Rows) ([]models.Proxy, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	withQuality := len(cols) == 15
+
 	proxies := make([]models.Proxy, 0)
 	for rows.Next() {
 		var (
@@ -174,9 +248,14 @@ func scanProxyRows(rows *sql.Rows) ([]models.Proxy, error) {
 			lastStr   sql.NullString
 			isWorking int
 			sourceID  sql.NullInt64
+			quality   sql.NullFloat64
 		)
-		if err := rows.Scan(&p.ID, &p.Host, &p.Port, &p.Protocol, &country, &city, &exitIP,
-			&latitude, &longitude, &latency, &mbps, &lastStr, &isWorking, &sourceID); err != nil {
+		targets := []any{&p.ID, &p.Host, &p.Port, &p.Protocol, &country, &city, &exitIP,
+			&latitude, &longitude, &latency, &mbps, &lastStr, &isWorking, &sourceID}
+		if withQuality {
+			targets = append(targets, &quality)
+		}
+		if err := rows.Scan(targets...); err != nil {
 			return nil, err
 		}
 		if country.Valid {
@@ -203,6 +282,10 @@ func scanProxyRows(rows *sql.Rows) ([]models.Proxy, error) {
 		if mbps.Valid {
 			v := mbps.Float64
 			p.DownloadMbps = &v
+		}
+		if quality.Valid {
+			v := quality.Float64
+			p.Quality = &v
 		}
 		p.LastChecked = parseTimeString(lastStr)
 		p.IsWorking = isWorking != 0
@@ -282,8 +365,10 @@ func (s *StorageService) UpdateTestResult(r TestResult) error {
 	return err
 }
 
-const proxyColumns = `SELECT id, host, port, protocol, country, city, exit_ip, latitude, longitude,
-	latency_ms, download_mbps, last_checked, is_working, source_id FROM proxies`
+const proxySelect = `id, host, port, protocol, country, city, exit_ip, latitude, longitude,
+	latency_ms, download_mbps, last_checked, is_working, source_id`
+
+const proxyColumns = "SELECT " + proxySelect + " FROM proxies"
 
 // GetProxyByID возвращает прокси по ID (или nil).
 func (s *StorageService) GetProxyByID(id int64) (*models.Proxy, error) {

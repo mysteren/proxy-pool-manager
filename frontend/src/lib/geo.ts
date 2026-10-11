@@ -1,14 +1,3 @@
-// countryFlag превращает код страны (US, DE, …) в эмодзи-флаг.
-export function countryFlag(code: string | null | undefined): string {
-  if (!code || code.length !== 2) {
-    return "";
-  }
-  const upper = code.toUpperCase();
-  return String.fromCodePoint(
-    ...[...upper].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65),
-  );
-}
-
 let regionNames: Intl.DisplayNames | null = null;
 if (typeof Intl !== "undefined" && "DisplayNames" in Intl) {
   try {

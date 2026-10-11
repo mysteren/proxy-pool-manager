@@ -91,13 +91,20 @@ var mtprotoSortColumns = map[string]string{
 }
 
 func mtprotoOrder(f models.MTProtoFilter) string {
-	column, ok := mtprotoSortColumns[f.SortBy]
-	if !ok {
-		column = "host"
-	}
 	dir := "ASC"
 	if strings.EqualFold(f.SortDir, "desc") {
 		dir = "DESC"
+	}
+	if f.SortBy == "distance" {
+		if expr, ok := distanceSqExpr(f.OriginLat, f.OriginLon); ok {
+			return " ORDER BY (" + expr + ") IS NULL, (" + expr + ") " + dir + ", id ASC"
+		}
+		// Координаты пользователя неизвестны — сортировка по расстоянию недоступна.
+		return " ORDER BY host ASC, id ASC"
+	}
+	column, ok := mtprotoSortColumns[f.SortBy]
+	if !ok {
+		column = "host"
 	}
 	if column == "ping_ms" || column == "jitter_ms" || column == "score" {
 		return " ORDER BY " + column + " IS NULL, " + column + " " + dir + ", id ASC"

@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatRelative } from "@/lib/time";
 import { formatLatency, latencyVariant } from "@/lib/proxy";
-import { countryFlag, countryName, formatDistance, haversineKm } from "@/lib/geo";
+import { countryName, formatDistance, haversineKm } from "@/lib/geo";
+import { CountryFlag } from "@/components/CountryFlag";
 import { toast } from "@/stores/toastStore";
 import { useTestStore } from "@/stores/testStore";
 import { useGeoStore } from "@/stores/geoStore";
@@ -88,6 +89,8 @@ export function MTProtoPage() {
         sortDir,
         limit: pageSize,
         offset,
+        originLat: myLocation?.latitude ?? null,
+        originLon: myLocation?.longitude ?? null,
       };
       if (status === "working") {
         filter.onlyWorking = true;
@@ -99,7 +102,7 @@ export function MTProtoPage() {
       }
       return filter;
     },
-    [status, noSource, typeFilter, debouncedSearch, sortBy, sortDir, pageSize],
+    [status, noSource, typeFilter, debouncedSearch, sortBy, sortDir, pageSize, myLocation],
   );
 
   const load = useCallback(
@@ -567,8 +570,9 @@ export function MTProtoPage() {
                 <Hint content={<><b>Город</b> — город сервера прокси по его IP, если гео-источник его сообщил.</>}>Город</Hint>
                 {sortIndicator("city")}
               </th>
-              <th className="px-4 py-2 font-medium">
+              <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => sortByColumn("distance")}>
                 <Hint content={<><b>Расстояние</b> — расстояние по прямой от вас до сервера прокси (по координатам обоих). Приблизительное. Появляется после «Определить гео».</>}>Расстояние</Hint>
+                {sortIndicator("distance")}
               </th>
               <th className="px-4 py-2 font-medium">
                 <Hint content={<><b>Тип</b> — MTProto — собственный прокси Telegram (маскировка FakeTLS/obfuscated); SOCKS — SOCKS5-прокси, поддерживающий MTProto.</>}>Тип</Hint>
@@ -633,7 +637,10 @@ export function MTProtoPage() {
                     className="px-4 py-2"
                     title={p.serverIp ? `${p.serverIp} · ${countryName(p.country)}` : countryName(p.country)}
                   >
-                    {countryFlag(p.country)} {p.country ?? "—"}
+                    <span className="flex items-center gap-1.5">
+                      <CountryFlag code={p.country} />
+                      {p.country ?? "—"}
+                    </span>
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">{p.city ?? "—"}</td>
                   <td className="px-4 py-2 text-muted-foreground">{formatDistance(distanceFor(p))}</td>

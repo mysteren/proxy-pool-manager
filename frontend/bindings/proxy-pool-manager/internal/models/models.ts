@@ -16,12 +16,18 @@ export interface MTProtoFilter {
     "search"?: string | null;
 
     /**
-     * ping|host|lastChecked
+     * ping|host|lastChecked|distance
      */
     "sortBy": string;
     "sortDir": string;
     "limit": number;
     "offset": number;
+
+    /**
+     * OriginLat/OriginLon — координаты пользователя (для сортировки по расстоянию).
+     */
+    "originLat"?: number | null;
+    "originLon"?: number | null;
 }
 
 /**
@@ -71,6 +77,12 @@ export interface Proxy {
     "lastChecked"?: string | null;
     "isWorking": boolean;
     "sourceId"?: number | null;
+
+    /**
+     * Quality — сводная оценка качества (0…100), вычисляется на лету при выборке
+     * (зависит от расстояния до пользователя), в БД не хранится.
+     */
+    "quality"?: number | null;
 }
 
 /**
@@ -99,7 +111,7 @@ export interface ProxyFilter {
     "search"?: string | null;
 
     /**
-     * latency|host|lastChecked
+     * latency|download|distance|quality|host|lastChecked
      */
     "sortBy": string;
 
@@ -109,6 +121,13 @@ export interface ProxyFilter {
     "sortDir": string;
     "limit": number;
     "offset": number;
+
+    /**
+     * OriginLat/OriginLon — координаты пользователя (для сортировки по расстоянию
+     * и оценки качества). Если не заданы — эти сортировки недоступны.
+     */
+    "originLat"?: number | null;
+    "originLon"?: number | null;
 }
 
 /**
