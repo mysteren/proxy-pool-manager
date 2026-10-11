@@ -1,10 +1,14 @@
 {
   "name": "proxy-pool-manager",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "vite",
+    "typecheck": "tsc --noEmit",
     "build:dev": "tsc && vite build --minify false --mode development",
     "build": "tsc && vite build --mode production",
     "preview": "vite preview"
