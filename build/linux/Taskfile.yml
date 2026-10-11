@@ -151,7 +151,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       APP_BINARY: '../../../bin/{{.APP_NAME}}'
       ICON: 'proxy-pool-manager.png'
-      ICON_SRC: '../../appicon.png'
+      ICON_SRC: '../../appicon-256.png'
       DESKTOP_FILE: '../proxy-pool-manager.desktop'
       OUTPUT_DIR: '../../../bin'
       LINUXDEPLOY_URL: 'https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage'
