@@ -23,7 +23,7 @@
 
 Требования:
 - Go 1.25+
-- Node.js 18+
+- Node.js 24+
 - Wails v3 Beta (`wails3 version`)
 
 Запуск в режиме разработки:

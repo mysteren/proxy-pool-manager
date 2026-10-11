@@ -110,21 +110,51 @@ tasks:
       - task: create:aur
 
   create:appimage:
-    summary: Creates an AppImage
+    summary: Creates an AppImage на системных GTK4/WebKitGTK (без бандлинга библиотек)
+    desc: |
+      Образ не содержит GTK4/WebKitGTK/libsoup — берёт их из системы (Debian 13+,
+      Ubuntu 24.04+, Fedora 39+, Arch/Manjaro, openSUSE Tumbleweed). Итог ~5 МБ
+      вместо ~80 МБ у self-contained варианта.
     dir: build/linux/appimage
     deps:
       - task: build
       - task: generate:dotdesktop
     cmds:
-      - cp "{{.APP_BINARY}}" "{{.APP_NAME}}"
-      - cp ../../appicon.png "{{.APP_NAME}}.png"
-      - wails3 generate appimage -binary "{{.APP_NAME}}" -icon {{.ICON}} -desktopfile {{.DESKTOP_FILE}} -outputdir {{.OUTPUT_DIR}} -builddir {{.ROOT_DIR}}/build/linux/appimage/build
+      - mkdir -p build
+      # linuxdeploy (кэшируем в build/): собирает AppImage из готового AppDir.
+      - |
+        if [ ! -x build/linuxdeploy-x86_64.AppImage ]; then
+          curl -fsSL -o build/linuxdeploy-x86_64.AppImage "{{.LINUXDEPLOY_URL}}"
+          chmod +x build/linuxdeploy-x86_64.AppImage
+        fi
+      # Иконка с именем, совпадающим с Icon= в .desktop.
+      - cp "{{.ICON_SRC}}" "{{.ICON}}"
+      - rm -rf "build/{{.APP_NAME}}-x86_64.AppDir"
+      # --exclude-library='*' — ничего не бандлим: GTK4/WebKitGTK/libsoup берём из
+      # системы (бандлинг GTK4 давал ошибки загрузки системных модулей из-за
+      # рассинхрона версий).
+      - >-
+        build/linuxdeploy-x86_64.AppImage --appimage-extract-and-run
+        --appdir "build/{{.APP_NAME}}-x86_64.AppDir"
+        --executable "{{.APP_BINARY}}"
+        --desktop-file "{{.DESKTOP_FILE}}"
+        --icon-file "{{.ICON}}"
+        --exclude-library='*'
+        --output appimage
+      # linuxdeploy называет файл по Name= из .desktop («Proxy Pool Manager») —
+      # берём первый собранный .AppImage и переименовываем в стабильное имя.
+      - |
+        set -e
+        APPIMAGE=$(ls -1 *.AppImage 2>/dev/null | head -n1)
+        mv "$APPIMAGE" "{{.OUTPUT_DIR}}/{{.APP_NAME}}-x86_64.AppImage"
     vars:
       APP_NAME: '{{.APP_NAME}}'
       APP_BINARY: '../../../bin/{{.APP_NAME}}'
-      ICON: '{{.APP_NAME}}.png'
-      DESKTOP_FILE: '../{{.APP_NAME}}.desktop'
+      ICON: 'proxy-pool-manager.png'
+      ICON_SRC: '../../appicon.png'
+      DESKTOP_FILE: '../proxy-pool-manager.desktop'
       OUTPUT_DIR: '../../../bin'
+      LINUXDEPLOY_URL: 'https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage'
 
   create:deb:
     summary: Creates a deb package

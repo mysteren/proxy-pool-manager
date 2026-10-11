@@ -11,6 +11,14 @@
 **Приложение НЕ управляет системным прокси.** Пользователь сам применяет
 скопированные прокси в своих инструментах.
 
+## Скачать
+
+Готовые сборки — в [Releases](https://github.com/mysteren/proxy-pool-manager/releases):
+
+- **Linux** — `.deb`, `.rpm`, `.pkg.tar.zst` (Arch) и `.AppImage` (использует системные GTK4 + WebKitGTK 6.0 — Debian 13+, Ubuntu 24.04+, Fedora 39+, Arch/Manjaro, openSUSE Tumbleweed);
+- **Windows** — установщик NSIS (`.exe`), портативный `.exe` и `.zip` (запуск без установки);
+- **macOS** — `.dmg` (universal: Intel + Apple Silicon).
+
 ## Стек
 
 - **Wails v3** — десктопный фреймворк (Go + WebView)
@@ -22,7 +30,7 @@
 
 ## Быстрый старт
 
-Требования: Go 1.25+, Node.js 18+, Wails v3 Beta (`wails3 version`).
+Требования: Go 1.25+, Node.js 24+, Wails v3 Beta (`wails3 version`).
 
 ```bash
 wails3 dev     # запуск в режиме разработки

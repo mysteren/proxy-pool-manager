@@ -6,13 +6,15 @@
 ## Общие требования
 
 - **Go 1.25+**
-- **Node.js 18+**
+- **Node.js 24+**
 - **Wails v3** (`wails3 version`)
 - **Linux**: компилятор C (CGO обязателен для WebKitGTK), `gcc`/`clang` + заголовки GTK4/WebKitGTK 6.0
 - **macOS**: Xcode Command Line Tools
 
 `nfpm` отдельно ставить **не нужно** — упаковщик встроен в `wails3 tool package`.
-Для AppImage при первой сборке скачиваются `linuxdeploy` и GTK-плагин (~20 МБ).
+Для AppImage при первой сборке скачивается `linuxdeploy` (~10 МБ); готовый образ
+**не бандлит** GTK4/WebKitGTK и требует их системно (Debian 13+, Ubuntu 24.04+,
+Fedora 39+, Arch/Manjaro, openSUSE Tumbleweed).
 
 Версия приложения задаётся в двух местах и должна совпадать:
 
