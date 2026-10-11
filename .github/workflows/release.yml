@@ -97,7 +97,10 @@ jobs:
           set -eo pipefail
           if ! wails3 package 2>&1 | tee package.log; then
             echo "::error title=Пакеты Linux::wails3 package failed"
-            tail -n 40 package.log | sed 's/^/::error::/'
+            # GitHub оставляет лишь первые ~10 аннотаций, поэтому важное (строки с
+            # ошибками и конец лога) выводим первыми, в обратном порядке.
+            grep -inE 'error|failed|fatal|cannot|no such|unable|denied|not found' package.log | tail -n 4 | sed 's/^/::error::/' || true
+            tac package.log | head -n 4 | sed 's/^/::error::/'
             exit 1
           fi
           ls -la bin
