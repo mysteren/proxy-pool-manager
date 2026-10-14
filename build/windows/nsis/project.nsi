@@ -38,7 +38,7 @@ Unicode true
 !define INFO_PROJECTNAME    "proxy-pool-manager"
 !define INFO_COMPANYNAME    "mysteren"
 !define INFO_PRODUCTNAME    "Proxy Pool Manager"
-!define INFO_PRODUCTVERSION "0.3.2"
+!define INFO_PRODUCTVERSION "0.3.3"
 !define INFO_COPYRIGHT      "© 2025, mysteren"
 ####
 ## Include the wails tools

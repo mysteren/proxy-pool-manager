@@ -17,7 +17,7 @@
         PackageDisplayName="Proxy Pool Manager"
         PublisherName="CN=mysteren"
         PublisherDisplayName="mysteren"
-        Version="0.3.2.0"
+        Version="0.3.3.0"
         PackageDescription="Сбор, проверка и управление пулом прокси">
         <Capabilities>
             <Capability Name="runFullTrust" />
