@@ -41,18 +41,28 @@ wails3 build
 Пакеты для установки в систему (deb/rpm/AppImage/Arch — Linux, NSIS/MSIX — Windows,
 .app/.dmg — macOS) см. [BUILD.md](BUILD.md).
 
+## Как читать
+
+- **Аудитории:** **[П]** — пользователь (как пользоваться), **[Р]** — разработчик (как устроено и как менять).
+- Это **источник правды** по проекту (RU). Короткие always-on правила для ИИ-агента —
+  [`../AGENTS.md`](../AGENTS.md); переносимый стандарт для новых Wails-проектов —
+  [`../PROJECT-BLUEPRINT.md`](../PROJECT-BLUEPRINT.md); EN-скилы — [`../.agents/skills/`](../.agents/skills/README.md).
+
 ## Документация
 
-- [REQUIREMENTS.md](REQUIREMENTS.md) — функциональные и нефункциональные требования
-- [ARCHITECTURE.md](ARCHITECTURE.md) — архитектура приложения
-- [DATA_MODEL.md](DATA_MODEL.md) — модель данных и схема БД
-- [UI_GUIDELINES.md](UI_GUIDELINES.md) — правила интерфейса
-- [TESTING_STRATEGY.md](TESTING_STRATEGY.md) — стратегия тестирования
-- [BUILD.md](BUILD.md) — сборка и упаковка для Linux/Windows/macOS
-- [RELEASE.md](RELEASE.md) — выпуск версии и публикация на GitHub
-- [SIGNING.md](SIGNING.md) — подпись сборок (Windows/macOS) через секреты
-- [ROADMAP.md](ROADMAP.md) — этапы разработки
-- [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) — работа с агентом через Zed
+| Документ | Аудитория | О чём |
+|----------|-----------|-------|
+| [REQUIREMENTS.md](REQUIREMENTS.md) | П+Р | Функциональные и нефункциональные требования |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Р | Архитектура приложения: слои, поток данных, ключевые решения |
+| [DATA_MODEL.md](DATA_MODEL.md) | Р | Модель данных и схема БД |
+| [CONVENTIONS.md](CONVENTIONS.md) | Р | Соглашения кода, инструменты и команды проверки |
+| [UI_GUIDELINES.md](UI_GUIDELINES.md) | П+Р | Правила интерфейса и компоненты |
+| [TESTING_STRATEGY.md](TESTING_STRATEGY.md) | Р | Стратегия тестирования (прокси и приложение) |
+| [BUILD.md](BUILD.md) | Р | Сборка и упаковка для Linux/Windows/macOS |
+| [RELEASE.md](RELEASE.md) | Р | Выпуск версии и публикация на GitHub |
+| [SIGNING.md](SIGNING.md) | Р | Подпись сборок (Windows/macOS) через секреты |
+| [ROADMAP.md](ROADMAP.md) | П+Р | Этапы разработки |
+| [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) | Р | Работа с ИИ-агентом: принципы, проверки, границы |
 
 ## Статус
 

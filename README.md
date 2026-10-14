@@ -37,13 +37,32 @@ wails3 dev     # запуск в режиме разработки
 wails3 build   # сборка релиза
 ```
 
+## Разработка и проверки
+
+Агент и разработчик работают по правилам [`AGENTS.md`](AGENTS.md) и переносимому стандарту
+[`PROJECT-BLUEPRINT.md`](PROJECT-BLUEPRINT.md). Офлайн-проверки:
+
+```sh
+# Go (main.go встраивает frontend/dist — нужна заглушка):
+mkdir -p frontend/dist && touch frontend/dist/index.html
+go test ./internal/... && go vet ./internal/...
+golangci-lint run
+
+# Фронтенд:
+cd frontend && npm run typecheck && npm run lint && npm test
+```
+
+То же через Taskfile: `task check` (lint + typecheck + tests).
+
 ## Документация
 
-Вся документация — в [`docs/`](docs/README.md):
+Вся документация — в [`docs/`](docs/README.md). Скилы для ИИ-агента — в
+[`.agents/skills/`](.agents/skills/README.md).
 
 - [REQUIREMENTS.md](docs/REQUIREMENTS.md) — функциональные и нефункциональные требования
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — архитектура приложения
 - [DATA_MODEL.md](docs/DATA_MODEL.md) — модель данных и схема БД
+- [CONVENTIONS.md](docs/CONVENTIONS.md) — соглашения кода, инструменты и команды
 - [UI_GUIDELINES.md](docs/UI_GUIDELINES.md) — правила интерфейса
 - [TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md) — стратегия тестирования
 - [ROADMAP.md](docs/ROADMAP.md) — этапы разработки

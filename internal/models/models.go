@@ -1,3 +1,4 @@
+// Package models содержит типы данных приложения (прокси, источники, MTProto, настройки).
 package models
 
 import "time"

@@ -7,7 +7,8 @@
 Версия дублируется в нескольких файлах, поэтому перед релизом поднимите её одной
 командой (она обновит `build/config.yml`, `build/linux/nfpm/nfpm.yaml`,
 `build/darwin/Info.plist`, `build/darwin/Info.dev.plist`, `build/windows/info.json`,
-`frontend/package.json`):
+`build/windows/nsis/project.nsi`, `build/windows/msix/*.xml`, `frontend/package.json`,
+`frontend/package-lock.json`):
 
 ```bash
 scripts/set-version.sh 0.2.0

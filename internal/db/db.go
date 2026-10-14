@@ -1,3 +1,4 @@
+// Package db открывает SQLite (через xdg-путь) и применяет миграции.
 package db
 
 import (

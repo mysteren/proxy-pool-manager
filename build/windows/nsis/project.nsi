@@ -31,6 +31,16 @@ Unicode true
 ## !define REQUEST_EXECUTION_LEVEL "admin"            # Default "admin"  see also https://nsis.sourceforge.io/Docs/Chapter4.html
 ## !define WAILS_INSTALL_SCOPE     "user"             # Default "machine" - set to "user" for per-user install ($LOCALAPPDATA) without UAC prompt
 ####
+## Данные продукта. Переопределяют шаблонные дефолты из wails_tools.nsh
+## (иначе установщик зовётся "My Product" и ставится в "My Company").
+## Путь установки по умолчанию: $PROGRAMFILES64\mysteren\Proxy Pool Manager
+####
+!define INFO_PROJECTNAME    "proxy-pool-manager"
+!define INFO_COMPANYNAME    "mysteren"
+!define INFO_PRODUCTNAME    "Proxy Pool Manager"
+!define INFO_PRODUCTVERSION "0.3.2"
+!define INFO_COPYRIGHT      "© 2025, mysteren"
+####
 ## Include the wails tools
 ####
 !include "wails_tools.nsh"

@@ -1,3 +1,4 @@
+// Package parser разбирает списки прокси (SOCKS5) и ссылки Telegram-прокси (MTProto).
 package parser
 
 import (

@@ -1,7 +1,7 @@
 {
   "name": "proxy-pool-manager",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -9,6 +9,10 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "build:dev": "tsc && vite build --minify false --mode development",
     "build": "tsc && vite build --mode production",
     "preview": "vite preview"
@@ -25,6 +29,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.4",
     "@types/react": "^18.2.43",
@@ -32,6 +37,7 @@
     "@vitejs/plugin-react": "^6.0.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.2.2",
-    "vite": "^8.0.5"
+    "vite": "^8.0.5",
+    "vitest": "^5.0.4"
   }
 }

@@ -1,0 +1,45 @@
+version: "2"
+
+linters:
+  # Базовый набор: errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  settings:
+    errcheck:
+      # Проект осознанно игнорирует ошибки закрытия ресурсов и записи в лог:
+      # это идиоматично и не влияет на логику.
+      exclude-functions:
+        - (net.Conn).Close
+        - (io.ReadCloser).Close
+        - (io.WriteCloser).Close
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.Stmt).Close
+        - (*database/sql.Tx).Rollback
+        - (net.Listener).Close
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+    staticcheck:
+      checks:
+        - all
+        # QF1001 (De Morgan) — стилевая рекомендация, не ошибка.
+        - -QF1001
+  exclusions:
+    generated: lax
+    # Платформенные заготовки Wails (build/ios, build/android, …) — не код проекта.
+    paths:
+      - build/
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - proxy-pool-manager
+  exclusions:
+    paths:
+      - build/

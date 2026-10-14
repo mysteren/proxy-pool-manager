@@ -1,0 +1,17 @@
+# Единая нормализация переводов строк: LF и в репозитории, и в рабочей копии —
+# независимо от ОС и от клиентских настроек (core.autocrlf). Это правило перебивает
+# core.autocrlf, поэтому поведение одинаково на Windows и Linux/macOS.
+# text=auto распознаёт бинарники по содержимому и не трогает их.
+* text=auto eol=lf
+
+# Windows-скрипты (если появятся) требуют CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Явная подстраховка для бинарных файлов (text=auto их и так определяет).
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.gif binary

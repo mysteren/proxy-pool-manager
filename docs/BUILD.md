@@ -16,10 +16,15 @@
 **не бандлит** GTK4/WebKitGTK и требует их системно (Debian 13+, Ubuntu 24.04+,
 Fedora 39+, Arch/Manjaro, openSUSE Tumbleweed).
 
-Версия приложения задаётся в двух местах и должна совпадать:
+Версия приложения дублируется в нескольких файлах: `build/config.yml`
+(`info.version`), `build/linux/nfpm/nfpm.yaml`, `build/darwin/Info.plist` и `Info.dev.plist`,
+`build/windows/info.json`, `build/windows/nsis/project.nsi` (`INFO_PRODUCTVERSION`),
+`build/windows/msix/template.xml` и `app_manifest.xml`, `frontend/package.json`.
+Обновлять одной командой:
 
-- `build/config.yml` → `info.version`
-- `build/linux/nfpm/nfpm.yaml` → `version`
+```bash
+scripts/set-version.sh 0.2.0
+```
 
 ## Linux
 
@@ -204,5 +209,17 @@ Windows SmartScreen показывает предупреждение при з�
   `CFBundleIdentifier`, версии, копирайт.
 - `build/windows/info.json` и `wails.exe.manifest` — `CompanyName`,
   `ProductName`, `FileDescription`, `LegalCopyright`, имя сборки.
+- `build/windows/nsis/project.nsi` — данные продукта для установщика NSIS
+  (`INFO_COMPANYNAME` / `INFO_PRODUCTNAME` / `INFO_PRODUCTVERSION` / `INFO_COPYRIGHT`).
+  От них зависит и путь установки по умолчанию:
+  `$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}` → `C:\Program Files\mysteren\Proxy Pool Manager`.
+  Без этих `!define` установщик берёт шаблонные дефолты из `wails_tools.nsh`
+  («My Company» / «My Product»).
+- `build/windows/msix/template.xml` и `app_manifest.xml` — те же данные продукта
+  (Name/Publisher/DisplayName/Version) для MSIX.
 - `build/linux/Taskfile.yml` (задача `generate:dotdesktop`) — `Name`, `Comment`,
   `Categories`, `Keywords` генерируемого `.desktop`.
+
+> ⚠️ Версию и данные продукта в `build/**` правим точечно, а не через
+> `wails3 task common:update:build-assets`: эта команда пересобирает платформенные ассеты
+> из `config.yml`, но **затирает ручные правки** (в т.ч. `build/windows/nsis/project.nsi`).

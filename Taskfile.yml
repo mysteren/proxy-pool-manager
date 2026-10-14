@@ -39,6 +39,59 @@ tasks:
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
+  lint:
+    summary: Lint Go (golangci-lint) and frontend (biome)
+    cmds:
+      - task: lint:go
+      - task: lint:frontend
+
+  lint:go:
+    summary: Run golangci-lint (needs frontend/dist to type-check main.go)
+    cmds:
+      - golangci-lint run
+
+  lint:frontend:
+    summary: Run biome (lint)
+    dir: frontend
+    cmds:
+      - npm run lint
+
+  format:
+    summary: Format frontend (biome)
+    dir: frontend
+    cmds:
+      - npm run format
+
+  typecheck:
+    summary: Type-check the frontend (tsc)
+    dir: frontend
+    cmds:
+      - npm run typecheck
+
+  test:
+    summary: Run all tests (go test + vitest)
+    cmds:
+      - task: test:go
+      - task: test:frontend
+
+  test:go:
+    summary: Run Go tests (internal packages)
+    cmds:
+      - go test ./internal/...
+
+  test:frontend:
+    summary: Run frontend tests (vitest)
+    dir: frontend
+    cmds:
+      - npm test
+
+  check:
+    summary: Full offline check (lint + typecheck + tests)
+    cmds:
+      - task: lint
+      - task: typecheck
+      - task: test
+
   install:msix:tools:
     summary: Installs tools required for Windows MSIX packaging
     cmds:

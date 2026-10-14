@@ -25,8 +25,8 @@ export function Sidebar() {
 
   return (
     <aside className="flex w-60 shrink-0 flex-col justify-between border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="flex flex-col gap-1 p-3">
-        <div className="px-2 py-3 text-sm font-semibold tracking-tight">
+      <div className="flex flex-col gap-1 p-3 pt-5">
+        <div className="px-2 py-3 text-lg font-semibold tracking-tight">
           Proxy Pool Manager
         </div>
         <nav className="flex flex-col gap-1">

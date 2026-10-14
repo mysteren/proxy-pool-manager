@@ -86,7 +86,7 @@
 proxy-pool-manager/
 ├── build/                  # иконки, манифесты для платформ
 ├── docs/                   # документация
-├── skills/                 # скилы для агента
+├── .agents/skills/         # скилы для агента (EN, «рецепт + указатели»)
 ├── frontend/
 │   ├── src/
 │   │   ├── components/

@@ -10,27 +10,27 @@
     <Installer
         Path="proxy-pool-manager"
         Arguments=""
-        InstallLocation="C:\Program Files\My Company\My Product">
+        InstallLocation="C:\Program Files\mysteren\Proxy Pool Manager">
     </Installer>
     <PackageInformation
-        PackageName="My Product"
-        PackageDisplayName="My Product"
-        PublisherName="CN=My Company"
-        PublisherDisplayName="My Company"
-        Version="0.1.0.0"
-        PackageDescription="A proxy-pool-manager application">
+        PackageName="Proxy Pool Manager"
+        PackageDisplayName="Proxy Pool Manager"
+        PublisherName="CN=mysteren"
+        PublisherDisplayName="mysteren"
+        Version="0.3.2.0"
+        PackageDescription="Сбор, проверка и управление пулом прокси">
         <Capabilities>
             <Capability Name="runFullTrust" />
-            
+
         </Capabilities>
         <Applications>
             <Application
-                Id="com.example.proxypoolmanager"
-                Description="A proxy-pool-manager application"
-                DisplayName="My Product"
+                Id="io.github.proxy-pool-manager"
+                Description="Сбор, проверка и управление пулом прокси"
+                DisplayName="Proxy Pool Manager"
                 ExecutableName="proxy-pool-manager"
                 EntryPoint="Windows.FullTrustApplication">
-                
+
             </Application>
         </Applications>
         <Resources>
@@ -41,9 +41,9 @@
         </Dependencies>
         <Properties>
             <Framework>false</Framework>
-            <DisplayName>My Product</DisplayName>
-            <PublisherDisplayName>My Company</PublisherDisplayName>
-            <Description>A proxy-pool-manager application</Description>
+            <DisplayName>Proxy Pool Manager</DisplayName>
+            <PublisherDisplayName>mysteren</PublisherDisplayName>
+            <Description>Сбор, проверка и управление пулом прокси</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>
